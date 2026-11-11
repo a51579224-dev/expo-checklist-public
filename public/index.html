@@ -118,9 +118,21 @@
   .inv-filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .inv-filters button { width: auto; margin: 0; font-size: 13px; padding: 8px 14px; }
   .inv-filters button.secondary.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .inv-add-row { display: flex; gap: 8px; margin-bottom: 16px; }
-  .inv-add-row input { flex: 1; }
+  .inv-add-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .inv-add-row input { flex: 1; min-width: 160px; }
   .inv-add-row button { width: auto; white-space: nowrap; margin: 0; }
+  .inv-naver-btn { background: #03c75a; } /* 네이버 브랜드 녹색 — 버튼만 구분되게, 나머지 테마는 그대로 */
+  .inv-naver-box { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 16px; background: var(--accent-light); }
+  .inv-naver-search { display: flex; gap: 8px; margin-bottom: 10px; }
+  .inv-naver-search input { flex: 1; background: #fff; }
+  .inv-naver-search button { width: auto; margin: 0; white-space: nowrap; }
+  .inv-naver-result-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); background: #fff; }
+  .inv-naver-result-row:last-child { border-bottom: none; }
+  .inv-naver-result-row .info { flex: 1; font-size: 14px; }
+  .inv-naver-result-row .price { font-size: 13px; color: var(--muted); }
+  .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .inv-naver-actions button { width: auto; margin: 0; }
+  .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
   .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
   .inv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .inv-card-head .txt { flex: 1; font-size: 16px; font-weight: 700; cursor: text; }
@@ -296,6 +308,7 @@
   let currentCatId = "contract";
   let lastAnimatedCatId = null;
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
+  let naverEnabled = false; // 이 서버(PET TIMES용)에 스마트스토어 연동이 설정돼 있을 때만 true
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -389,6 +402,10 @@
         document.getElementById("dt-link").textContent = location.origin + "/e/" + slug;
         sessionStorage.removeItem("justCreated");
       }
+      try {
+        const r = await fetch("/api/naver/status");
+        naverEnabled = (await r.json()).enabled;
+      } catch { naverEnabled = false; }
       await refreshDetail();
     }
   }
@@ -606,7 +623,19 @@
     });
     addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addBtn.click(); });
     addRow.append(addInput, addBtn);
+    if (naverEnabled) {
+      const naverBtn = document.createElement("button");
+      naverBtn.className = "small inv-naver-btn";
+      naverBtn.textContent = "스마트스토어에서 상품 불러오기";
+      naverBtn.addEventListener("click", () => {
+        const box = document.getElementById("inv-naver-box");
+        box.style.display = box.style.display === "none" ? "block" : "none";
+      });
+      addRow.appendChild(naverBtn);
+    }
     container.appendChild(addRow);
+
+    if (naverEnabled) container.appendChild(buildNaverImportBox());
 
     // 필터 적용
     const visibleItems = items.filter((it) => {
@@ -631,6 +660,89 @@
     }
 
     visibleItems.forEach((it) => container.appendChild(buildInventoryCard(it)));
+  }
+
+  // 스마트스토어 상품 불러오기(PET TIMES 전용, 조회만 — 수동 추가는 그대로 계속 쓸 수 있음)
+  function buildNaverImportBox() {
+    const box = document.createElement("div");
+    box.className = "inv-naver-box";
+    box.id = "inv-naver-box";
+    box.style.display = "none";
+    box.innerHTML = `<div class="inv-naver-hint">PET TIMES 스마트스토어 상품을 검색해서 이번 박람회에 가져갈 품목만 추가하세요. 이미 추가한 상품은 다시 불러와도 중복되지 않아요.</div>`;
+
+    const searchRow = document.createElement("div");
+    searchRow.className = "inv-naver-search";
+    const qInput = document.createElement("input");
+    qInput.type = "text";
+    qInput.placeholder = "상품명 검색 (예: 메가스크래쳐)";
+    const searchBtn = document.createElement("button");
+    searchBtn.className = "small";
+    searchBtn.textContent = "검색";
+    const resultsEl = document.createElement("div");
+
+    const runSearch = async () => {
+      const q = qInput.value.trim();
+      if (!q) return;
+      resultsEl.innerHTML = `<div class="hint">검색 중...</div>`;
+      try {
+        const res = await fetch(`/api/naver/products/search?q=${encodeURIComponent(q)}`);
+        const body = await res.json();
+        if (!res.ok) { resultsEl.innerHTML = `<div class="error">${escapeHtml(body.error || "검색 실패")}</div>`; return; }
+        renderNaverResults(resultsEl, body.rows || []);
+      } catch (e) {
+        resultsEl.innerHTML = `<div class="error">검색 중 오류가 발생했어요.</div>`;
+      }
+    };
+    searchBtn.addEventListener("click", runSearch);
+    qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
+    searchRow.append(qInput, searchBtn);
+
+    box.append(searchRow, resultsEl);
+    return box;
+  }
+
+  function renderNaverResults(container, rows) {
+    container.innerHTML = "";
+    if (rows.length === 0) {
+      container.innerHTML = `<div class="hint">검색 결과가 없어요.</div>`;
+      return;
+    }
+    const checked = new Set();
+    rows.forEach((r, idx) => {
+      const row = document.createElement("div");
+      row.className = "inv-naver-result-row";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.addEventListener("change", () => { if (cb.checked) checked.add(idx); else checked.delete(idx); });
+      const info = document.createElement("span");
+      info.className = "info";
+      info.textContent = r.optionName ? `${r.name} - ${r.optionName}` : r.name;
+      const price = document.createElement("span");
+      price.className = "price";
+      price.textContent = r.price ? `${Number(r.price).toLocaleString()}원` : "";
+      row.append(cb, info, price);
+      container.appendChild(row);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "inv-naver-actions";
+    const addBtn = document.createElement("button");
+    addBtn.className = "small";
+    addBtn.textContent = "선택한 상품 추가";
+    addBtn.addEventListener("click", async () => {
+      const selected = rows.filter((_, idx) => checked.has(idx));
+      if (selected.length === 0) { alert("추가할 상품을 체크해주세요."); return; }
+      const res = await fetch(`${API}/${currentSlug}/categories/inventory/naver-import`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: selected }),
+      });
+      const body = await res.json();
+      if (res.ok && body.skipped > 0) {
+        alert(`${body.added}개 추가, ${body.skipped}개는 이미 있어서 건너뛰었어요.`);
+      }
+      await refreshDetail();
+    });
+    actions.appendChild(addBtn);
+    container.appendChild(actions);
   }
 
   function buildInventoryCard(it) {

@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePosExcel } from "./posParser.js";
+import { isNaverConfigured, searchProducts } from "./naverProducts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -96,6 +97,7 @@ function cloneCategories(categories) {
       done: false,
       ...(it.group !== undefined ? { group: it.group } : {}),
       ...(it.qty !== undefined ? { qty: it.qty } : {}),
+      ...(it.naverProductId !== undefined ? { naverProductId: it.naverProductId, naverOptionId: it.naverOptionId } : {}),
       ...(it.loaded !== undefined ? { loaded: false } : {}),
       ...(it.ctnPlanned !== undefined ? { ctnPlanned: it.ctnPlanned } : {}),
       ...(it.pcPlanned !== undefined ? { pcPlanned: it.pcPlanned } : {}),
@@ -372,6 +374,57 @@ app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
     res.json({ item, progress: computeProgress(ev.categories) });
   } catch (err) {
     res.status(err.status || 500).json({ error: String(err.message || err) });
+  }
+});
+
+// 네이버 스마트스토어 연동 — PET TIMES 서버에만 환경변수가 설정돼 있을 때만 동작함(조회 전용).
+// 다른 브랜드 복제본은 이 라우트들이 전부 "연동 안 됨"으로만 응답하고, 화면에서도 버튼 자체가 안 보임.
+app.get("/api/naver/status", (_req, res) => {
+  res.json({ enabled: isNaverConfigured() });
+});
+
+app.get("/api/naver/products/search", async (req, res) => {
+  if (!isNaverConfigured()) return res.status(501).json({ error: "이 서버엔 스마트스토어 연동이 설정되어 있지 않아요." });
+  const q = String(req.query.q || "").trim();
+  if (!q) return res.status(400).json({ error: "검색어를 입력해주세요." });
+  try {
+    const rows = await searchProducts(q);
+    res.json({ rows });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// 스마트스토어에서 고른 상품/옵션을 '상품 재고' 품목으로 일괄 추가 — naverProductId+naverOptionId
+// 기준으로 이미 추가된 건 건너뛰어서, 목록을 여러 번 다시 불러와도 중복되지 않게 함.
+app.post("/api/events/:slug/categories/inventory/naver-import", async (req, res) => {
+  const { items } = req.body ?? {};
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "추가할 상품을 선택해주세요." });
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const ev = rowToEvent(row);
+    const cat = findCategory(ev, "inventory");
+    const existingKeys = new Set(
+      cat.items.filter((it) => it.naverProductId).map((it) => `${it.naverProductId}::${it.naverOptionId || ""}`)
+    );
+    let added = 0;
+    let skipped = 0;
+    for (const sel of items) {
+      const key = `${sel.naverProductId}::${sel.naverOptionId || ""}`;
+      if (existingKeys.has(key)) { skipped++; continue; }
+      existingKeys.add(key);
+      const text = sel.optionName ? `${sel.name} - ${sel.optionName}` : sel.name;
+      cat.items.push({
+        id: newId("item"), text, done: false,
+        naverProductId: String(sel.naverProductId), naverOptionId: String(sel.naverOptionId || ""),
+      });
+      added++;
+    }
+    await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
+    res.json({ added, skipped, progress: computeProgress(ev.categories), items: cat.items });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
   }
 });
 
