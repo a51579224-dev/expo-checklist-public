@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>박람회 체크리스트</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <style>
   :root {
     --pink: #ff8fc0;
@@ -64,6 +66,8 @@
   .link-box code { flex: 1; }
   .copied { color: #2b8a3e; font-size: 12px; margin-top: 4px; }
   .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+  .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background: var(--pink); border-color: var(--pink); }
+  .flatpickr-day.inRange { background: var(--pink-light); border-color: var(--pink-light); box-shadow: -5px 0 0 var(--pink-light), 5px 0 0 var(--pink-light); }
 </style>
 </head>
 <body>
@@ -77,18 +81,17 @@
     <div id="view-create">
       <div class="card">
         <label>행사명 *</label>
-        <input type="text" id="cr-name" placeholder="예: 2027 서울 펫페어" />
-        <label>기간 시작</label>
-        <input type="date" id="cr-start" />
-        <label>기간 종료 (선택)</label>
-        <input type="date" id="cr-end" />
+        <input type="text" id="cr-name" list="expo-name-options" placeholder="박람회명 선택 또는 직접 입력" autocomplete="off" />
+        <label>행사 기간</label>
+        <input type="text" id="cr-period" placeholder="기간 선택" readonly />
         <label>장소 (선택)</label>
         <input type="text" id="cr-location" />
-        <label>부스 수 (선택)</label>
-        <input type="text" id="cr-booth" placeholder="예: 2부스" />
+        <label>부스 번호 (선택)</label>
+        <input type="text" id="cr-booth" placeholder="예: A-12" />
         <button id="cr-submit">체크리스트 만들기</button>
         <div class="error" id="cr-error"></div>
       </div>
+      <datalist id="expo-name-options"></datalist>
       <div class="hint" style="text-align:center">
         로그인이 없어서, 만들고 나면 생기는 <b>링크를 꼭 저장(북마크/공유)</b>해두셔야 다시 들어올 수 있어요.
       </div>
@@ -116,14 +119,12 @@
 
         <div id="dt-edit-form" style="display:none;margin-top:14px">
           <label>행사명</label>
-          <input type="text" id="ed-name" />
-          <label>기간 시작</label>
-          <input type="date" id="ed-start" />
-          <label>기간 종료 (선택)</label>
-          <input type="date" id="ed-end" />
+          <input type="text" id="ed-name" list="expo-name-options" autocomplete="off" />
+          <label>행사 기간</label>
+          <input type="text" id="ed-period" placeholder="기간 선택" readonly />
           <label>장소 (선택)</label>
           <input type="text" id="ed-location" />
-          <label>부스 수 (선택)</label>
+          <label>부스 번호 (선택)</label>
           <input type="text" id="ed-booth" />
           <button id="ed-save">저장</button>
         </div>
@@ -134,10 +135,8 @@
           <div id="dup-form" style="display:none;margin-top:10px">
             <label>새 행사명</label>
             <input type="text" id="dup-name" />
-            <label>기간 시작 (선택)</label>
-            <input type="date" id="dup-start" />
-            <label>기간 종료 (선택)</label>
-            <input type="date" id="dup-end" />
+            <label>행사 기간 (선택)</label>
+            <input type="text" id="dup-period" placeholder="기간 선택" readonly />
             <button id="dup-submit">복제해서 새 체크리스트 만들기</button>
           </div>
         </div>
@@ -165,6 +164,44 @@
   let currentEvent = null;
   let currentCatId = "contract";
 
+  // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
+  const EXPO_NAME_OPTIONS = [
+    "궁디팡팡 캣페스타",
+    "냥냥펀치 캣쇼",
+    "메가주",
+    "가낳지모 캣페어",
+    "마이캣페어",
+    "케이펫페어",
+    "서울펫쇼",
+  ];
+
+  function populateExpoNameOptions() {
+    const dl = document.getElementById("expo-name-options");
+    dl.innerHTML = EXPO_NAME_OPTIONS.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
+  }
+
+  function fmtDot(iso) {
+    return iso ? iso.replaceAll("-", ".") : "";
+  }
+
+  // 날짜 범위 선택 캘린더 하나를 input에 붙인다. 이미 붙어있으면 지우고 새로 붙임(폼 열 때마다 최신 값으로 리셋하려고).
+  // onChange(startIso, endIso) — 둘 다 'YYYY-MM-DD' 형식, 저장/서버 전송용.
+  function attachRangePicker(inputEl, startIso, endIso, onChange) {
+    if (inputEl._flatpickr) inputEl._flatpickr.destroy();
+    const defaultDate = [startIso, endIso].filter(Boolean);
+    flatpickr(inputEl, {
+      mode: "range",
+      dateFormat: "Y.m.d",
+      locale: { rangeSeparator: " ~ " },
+      defaultDate: defaultDate.length ? defaultDate : undefined,
+      onChange: (selectedDates, _dateStr, instance) => {
+        const s = selectedDates[0] ? instance.formatDate(selectedDates[0], "Y-m-d") : "";
+        const e = selectedDates[1] ? instance.formatDate(selectedDates[1], "Y-m-d") : "";
+        onChange(s, e);
+      },
+    });
+  }
+
   function escapeHtml(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
@@ -174,7 +211,13 @@
     return m ? m[1] : null;
   }
 
+  let crRange = { start: "", end: "" };
+  let edRange = { start: "", end: "" };
+  let dupRange = { start: "", end: "" };
+
   async function init() {
+    populateExpoNameOptions();
+    attachRangePicker(document.getElementById("cr-period"), "", "", (s, e) => { crRange = { start: s, end: e }; });
     const slug = slugFromPath();
     if (slug) {
       currentSlug = slug;
@@ -197,8 +240,8 @@
     if (!name) { errEl.textContent = "행사명을 입력해주세요."; return; }
     const payload = {
       name,
-      startDate: document.getElementById("cr-start").value,
-      endDate: document.getElementById("cr-end").value,
+      startDate: crRange.start,
+      endDate: crRange.end,
       location: document.getElementById("cr-location").value.trim(),
       boothCount: document.getElementById("cr-booth").value.trim(),
     };
@@ -237,7 +280,7 @@
       return { total, done, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
     })();
     document.getElementById("dt-name").textContent = ev.name;
-    const period = [ev.startDate, ev.endDate].filter(Boolean).join(" ~ ");
+    const period = [fmtDot(ev.startDate), fmtDot(ev.endDate)].filter(Boolean).join(" ~ ");
     document.getElementById("dt-meta").textContent = [period, ev.location, ev.boothCount].filter(Boolean).join(" · ") || "-";
     document.getElementById("dt-bar").style.width = progress.percent + "%";
     document.getElementById("dt-progress-text").textContent = `${progress.done}/${progress.total} 완료 (${progress.percent}%)`;
@@ -360,8 +403,8 @@
     const form = document.getElementById("dt-edit-form");
     if (form.style.display === "none") {
       document.getElementById("ed-name").value = currentEvent.name;
-      document.getElementById("ed-start").value = currentEvent.startDate || "";
-      document.getElementById("ed-end").value = currentEvent.endDate || "";
+      edRange = { start: currentEvent.startDate || "", end: currentEvent.endDate || "" };
+      attachRangePicker(document.getElementById("ed-period"), edRange.start, edRange.end, (s, e) => { edRange = { start: s, end: e }; });
       document.getElementById("ed-location").value = currentEvent.location || "";
       document.getElementById("ed-booth").value = currentEvent.boothCount || "";
       form.style.display = "block";
@@ -373,8 +416,8 @@
   document.getElementById("ed-save").addEventListener("click", async () => {
     const payload = {
       name: document.getElementById("ed-name").value.trim(),
-      startDate: document.getElementById("ed-start").value,
-      endDate: document.getElementById("ed-end").value,
+      startDate: edRange.start,
+      endDate: edRange.end,
       location: document.getElementById("ed-location").value.trim(),
       boothCount: document.getElementById("ed-booth").value.trim(),
     };
@@ -388,6 +431,8 @@
     const form = document.getElementById("dup-form");
     if (form.style.display === "none") {
       document.getElementById("dup-name").value = currentEvent.name + " (다음 행사)";
+      dupRange = { start: "", end: "" };
+      attachRangePicker(document.getElementById("dup-period"), "", "", (s, e) => { dupRange = { start: s, end: e }; });
       form.style.display = "block";
     } else {
       form.style.display = "none";
@@ -399,8 +444,8 @@
     if (!newName) { alert("새 행사명을 입력해주세요."); return; }
     const payload = {
       newName,
-      startDate: document.getElementById("dup-start").value,
-      endDate: document.getElementById("dup-end").value,
+      startDate: dupRange.start,
+      endDate: dupRange.end,
     };
     try {
       const res = await fetch(`${API}/${currentSlug}/duplicate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
