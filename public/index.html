@@ -96,6 +96,36 @@
     display: inline-block; background: var(--pink-light); color: #c0527a; font-weight: 700;
     font-size: 12px; padding: 6px 10px; border-radius: 999px; margin-top: 8px;
   }
+
+  /* 상품 재고: 요약 카드 + 품목 카드 */
+  .inv-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .inv-stat { background: var(--pink-light); border-radius: 10px; padding: 10px 6px; text-align: center; }
+  .inv-stat .num { font-size: 18px; font-weight: 800; color: #c0527a; display: block; }
+  .inv-stat .lbl { font-size: 11px; color: var(--muted); }
+  .inv-filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .inv-filters button { width: auto; margin: 0; font-size: 12px; padding: 7px 12px; }
+  .inv-filters button.secondary.active { background: var(--pink); color: #fff; border-color: var(--pink); }
+  .inv-add-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .inv-add-row input { flex: 1; }
+  .inv-add-row button { width: auto; white-space: nowrap; margin: 0; }
+  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .inv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .inv-card-head .txt { flex: 1; font-size: 14px; font-weight: 700; cursor: text; }
+  .inv-card-head .txt.done { text-decoration: line-through; color: var(--muted); }
+  .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 30px; margin: 0; flex-shrink: 0; }
+  .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .inv-qty-row .qlbl { font-size: 12px; color: var(--muted); flex-shrink: 0; width: 44px; }
+  .inv-qty-row input[type="number"] {
+    width: 58px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+  .inv-qty-row .unit { font-size: 12px; color: var(--muted); }
+  .inv-total-pc { font-size: 12px; color: #c0527a; margin-left: 4px; }
+  .inv-diff { font-size: 12px; color: #d6336c; margin-left: 6px; }
+  .inv-checks { display: flex; gap: 14px; margin: 8px 0; }
+  .inv-checks label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; margin: 0; cursor: pointer; }
+  .inv-checks input[type="checkbox"] { width: auto; margin: 0; }
+  .inv-note { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; }
+  .inv-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
 </style>
 </head>
 <body>
@@ -200,6 +230,7 @@
   let currentSlug = null;
   let currentEvent = null;
   let currentCatId = "contract";
+  let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -389,6 +420,11 @@
       renderContractPanel(itemsBody, ev);
       return;
     }
+    if (cat.id === "inventory") {
+      addItemRow.style.display = "none";
+      renderInventoryPanel(itemsBody, cat);
+      return;
+    }
     addItemRow.style.display = "flex";
 
     cat.items.forEach((it, idx) => {
@@ -425,6 +461,204 @@
       row.append(cb, textEl, upBtn, downBtn, delBtn);
       itemsBody.appendChild(row);
     });
+  }
+
+  // ===== 상품 재고 탭: 품목별 준비 수량(CTN/PC) + 준비완료/차량적재완료 더블체크 =====
+  function renderInventoryPanel(container, cat) {
+    const items = cat.items;
+
+    // 요약 카드
+    const total = items.length;
+    const preparedCount = items.filter((it) => it.done).length;
+    const loadedCount = items.filter((it) => it.loaded).length;
+    const percent = total === 0 ? 0 : Math.round((preparedCount / total) * 100);
+    const stats = document.createElement("div");
+    stats.className = "inv-stats";
+    stats.innerHTML = `
+      <div class="inv-stat"><span class="num">${total}</span><span class="lbl">총 품목</span></div>
+      <div class="inv-stat"><span class="num">${preparedCount}</span><span class="lbl">준비완료</span></div>
+      <div class="inv-stat"><span class="num">${loadedCount}</span><span class="lbl">차량적재완료</span></div>
+      <div class="inv-stat"><span class="num">${percent}%</span><span class="lbl">준비율</span></div>
+    `;
+    container.appendChild(stats);
+
+    // 필터
+    const filters = document.createElement("div");
+    filters.className = "inv-filters";
+    const mkFilterBtn = (label, key) => {
+      const b = document.createElement("button");
+      b.className = "secondary" + (invFilter[key] ? " active" : "");
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        invFilter[key] = !invFilter[key];
+        renderDetail();
+      });
+      return b;
+    };
+    filters.appendChild(mkFilterBtn("미준비만 보기", "onlyUnprepared"));
+    filters.appendChild(mkFilterBtn("차량 미적재만 보기", "onlyUnloaded"));
+    container.appendChild(filters);
+
+    // 품목 추가
+    const addRow = document.createElement("div");
+    addRow.className = "inv-add-row";
+    const addInput = document.createElement("input");
+    addInput.type = "text";
+    addInput.placeholder = "품목명 (예: 메가스크래쳐 84cm 내추럴)";
+    const addBtn = document.createElement("button");
+    addBtn.className = "small";
+    addBtn.textContent = "품목 추가";
+    addBtn.addEventListener("click", async () => {
+      const text = addInput.value.trim();
+      if (!text) return;
+      await fetch(`${API}/${currentSlug}/categories/inventory/items`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+      });
+      await refreshDetail();
+    });
+    addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addBtn.click(); });
+    addRow.append(addInput, addBtn);
+    container.appendChild(addRow);
+
+    // 필터 적용
+    const visibleItems = items.filter((it) => {
+      if (invFilter.onlyUnprepared && it.done) return false;
+      if (invFilter.onlyUnloaded && it.loaded) return false;
+      return true;
+    });
+
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "inv-empty";
+      empty.textContent = "아직 등록된 품목이 없어요. 위에서 가져갈 상품을 하나씩 추가해주세요.";
+      container.appendChild(empty);
+      return;
+    }
+    if (visibleItems.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "inv-empty";
+      empty.textContent = "필터 조건에 맞는 품목이 없어요.";
+      container.appendChild(empty);
+      return;
+    }
+
+    visibleItems.forEach((it) => container.appendChild(buildInventoryCard(it)));
+  }
+
+  function buildInventoryCard(it) {
+    const card = document.createElement("div");
+    card.className = "inv-card";
+
+    // 품목명 + 삭제
+    const head = document.createElement("div");
+    head.className = "inv-card-head";
+    const textEl = document.createElement("span");
+    textEl.className = "txt" + (it.done ? " done" : "");
+    textEl.textContent = it.text;
+    textEl.addEventListener("click", () => startEditItem("inventory", it, textEl));
+    const delBtn = document.createElement("button");
+    delBtn.className = "del";
+    delBtn.textContent = "삭제";
+    delBtn.addEventListener("click", () => deleteItem("inventory", it.id));
+    head.append(textEl, delBtn);
+    card.appendChild(head);
+
+    const saveField = (field, value) => saveInventoryItem(it.id, { [field]: value });
+
+    // 준비 예정 수량 (CTN / PC) + 박스입수
+    const planRow = document.createElement("div");
+    planRow.className = "inv-qty-row";
+    planRow.innerHTML = `<span class="qlbl">예정</span>`;
+    const ctnPlannedInput = numInput(it.ctnPlanned, "CTN");
+    const pcPlannedInput = numInput(it.pcPlanned, "PC");
+    const boxQtyInput = numInput(it.boxQty, "박스당 PC(선택)");
+    boxQtyInput.style.width = "90px";
+    ctnPlannedInput.addEventListener("change", () => { saveField("ctnPlanned", ctnPlannedInput.value); });
+    pcPlannedInput.addEventListener("change", () => { saveField("pcPlanned", pcPlannedInput.value); });
+    boxQtyInput.addEventListener("change", () => { saveField("boxQty", boxQtyInput.value); });
+    planRow.append(ctnPlannedInput, span("unit", "CTN"), pcPlannedInput, span("unit", "PC"), boxQtyInput, span("unit", "= 박스당 PC"));
+    if (it.boxQty) {
+      const totalPc = (it.ctnPlanned || 0) * it.boxQty + (it.pcPlanned || 0);
+      planRow.appendChild(span("inv-total-pc", `→ 총 ${totalPc} PC`));
+    }
+    card.appendChild(planRow);
+
+    // 실제 준비 수량 (CTN / PC)
+    const actualRow = document.createElement("div");
+    actualRow.className = "inv-qty-row";
+    actualRow.innerHTML = `<span class="qlbl">실제</span>`;
+    const ctnActualInput = numInput(it.ctnActual, "CTN");
+    const pcActualInput = numInput(it.pcActual, "PC");
+    ctnActualInput.addEventListener("change", () => { saveField("ctnActual", ctnActualInput.value); });
+    pcActualInput.addEventListener("change", () => { saveField("pcActual", pcActualInput.value); });
+    actualRow.append(ctnActualInput, span("unit", "CTN"), pcActualInput, span("unit", "PC"));
+    const ctnDiff = (it.ctnActual ?? null) !== null && (it.ctnPlanned ?? null) !== null ? it.ctnActual - it.ctnPlanned : 0;
+    const pcDiff = (it.pcActual ?? null) !== null && (it.pcPlanned ?? null) !== null ? it.pcActual - it.pcPlanned : 0;
+    if (ctnDiff !== 0 || pcDiff !== 0) {
+      actualRow.appendChild(span("inv-diff", `차이: CTN ${ctnDiff > 0 ? "+" : ""}${ctnDiff} / PC ${pcDiff > 0 ? "+" : ""}${pcDiff}`));
+    }
+    card.appendChild(actualRow);
+
+    // 준비완료 / 차량적재완료 체크
+    const checks = document.createElement("div");
+    checks.className = "inv-checks";
+    const prepLabel = document.createElement("label");
+    const prepCb = document.createElement("input");
+    prepCb.type = "checkbox";
+    prepCb.checked = !!it.done;
+    prepCb.addEventListener("change", () => toggleItem("inventory", it.id, prepCb.checked));
+    prepLabel.append(prepCb, document.createTextNode("준비완료"));
+
+    const loadLabel = document.createElement("label");
+    const loadCb = document.createElement("input");
+    loadCb.type = "checkbox";
+    loadCb.checked = !!it.loaded;
+    loadCb.addEventListener("change", async () => {
+      if (loadCb.checked && !it.done) {
+        if (!confirm("아직 '준비완료' 체크가 안 된 품목이에요. 그래도 차량 적재 완료로 표시할까요?")) {
+          loadCb.checked = false;
+          return;
+        }
+      }
+      await saveInventoryItem(it.id, { loaded: loadCb.checked });
+    });
+    loadLabel.append(loadCb, document.createTextNode("차량적재완료"));
+    checks.append(prepLabel, loadLabel);
+    card.appendChild(checks);
+
+    // 메모 (부분 적재 등)
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.className = "inv-note";
+    noteInput.placeholder = "메모 (예: 2박스만 우선 적재, 나머지는 당일 추가)";
+    noteInput.value = it.note || "";
+    noteInput.addEventListener("change", () => saveField("note", noteInput.value));
+    card.appendChild(noteInput);
+
+    return card;
+  }
+
+  function numInput(value, placeholder) {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.placeholder = placeholder;
+    if (value !== null && value !== undefined) input.value = value;
+    return input;
+  }
+
+  function span(className, text) {
+    const el = document.createElement("span");
+    el.className = className;
+    el.textContent = text;
+    return el;
+  }
+
+  async function saveInventoryItem(itemId, fields) {
+    await fetch(`${API}/${currentSlug}/categories/inventory/items/${itemId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields),
+    });
+    await refreshDetail();
   }
 
   // ===== 행사 계약 탭: 부스위치 / 배치도+마커 / 차량 입차시간 =====

@@ -38,14 +38,9 @@ const DEFAULT_TEMPLATE_ITEMS = {
   // 새 행사엔 더 이상 항목을 넣지 않음. 예전 행사에 이미 저장된 계약 체크리스트 항목은
   // DB에서 지우지 않고 그대로 두되(복구 가능), 화면에서만 안 보이게 처리함.
   contract: [],
-  inventory: [
-    "참가 제품 목록 확정",
-    "제품별 판매 수량 확인",
-    "전시용 샘플 및 예비 재고 확인",
-    "행사 판매가·할인율 확인",
-    "상품별 수량 검수 및 박스 포장",
-    "차량 상품 적재 확인",
-  ],
+  // 2026-11-11: '상품 재고'도 고정 체크리스트 문구 대신, 행사마다 품목을 직접 입력하는
+  // 수량(CTN/PC)+준비완료+차량적재완료 전용 화면으로 바뀌어서 기본 항목을 비워둠.
+  inventory: [],
   supplies: [
     "테이블·선반·진열대 준비",
     "현수막·가격표·안내물 준비",
@@ -92,7 +87,19 @@ function cloneCategories(categories) {
   return categories.map((c) => ({
     id: c.id,
     name: c.name,
-    items: c.items.map((it) => ({ id: newId("item"), text: it.text, done: false })),
+    // 품목(text)과 '준비 예정' 계획 수량은 그대로 가져오되, 완료/적재 체크와 실제 확인 수량·메모는 초기화.
+    items: c.items.map((it) => ({
+      id: newId("item"),
+      text: it.text,
+      done: false,
+      ...(it.loaded !== undefined ? { loaded: false } : {}),
+      ...(it.ctnPlanned !== undefined ? { ctnPlanned: it.ctnPlanned } : {}),
+      ...(it.pcPlanned !== undefined ? { pcPlanned: it.pcPlanned } : {}),
+      ...(it.boxQty !== undefined ? { boxQty: it.boxQty } : {}),
+      ...(it.ctnActual !== undefined ? { ctnActual: null } : {}),
+      ...(it.pcActual !== undefined ? { pcActual: null } : {}),
+      ...(it.note !== undefined ? { note: "" } : {}),
+    })),
   }));
 }
 
@@ -307,9 +314,17 @@ app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
   }
 });
 
-// 항목 수정(이름 변경) 및/또는 완료 체크 토글
+// 숫자 입력칸 공용 보정: 빈값/음수/NaN은 전부 null로 (저장은 하되 억지로 0을 넣지 않음)
+function normalizeQty(v) {
+  if (v === undefined) return undefined; // 아예 안 보낸 필드는 건드리지 않음
+  if (v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+// 항목 수정 — 이름 변경, 완료/적재 체크 토글, '상품 재고' 전용 수량·메모 필드(있을 때만 반영)
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
-  const { text, done } = req.body ?? {};
+  const { text, done, loaded, ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, note } = req.body ?? {};
   try {
     const row = await getEventRow(req.params.slug);
     if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
@@ -322,6 +337,13 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
       item.text = text.trim();
     }
     if (done !== undefined) item.done = !!done;
+    if (loaded !== undefined) item.loaded = !!loaded;
+    if (ctnPlanned !== undefined) item.ctnPlanned = normalizeQty(ctnPlanned);
+    if (pcPlanned !== undefined) item.pcPlanned = normalizeQty(pcPlanned);
+    if (boxQty !== undefined) item.boxQty = normalizeQty(boxQty);
+    if (ctnActual !== undefined) item.ctnActual = normalizeQty(ctnActual);
+    if (pcActual !== undefined) item.pcActual = normalizeQty(pcActual);
+    if (note !== undefined) item.note = String(note).trim();
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
     res.json({ item, progress: computeProgress(ev.categories) });
   } catch (err) {
