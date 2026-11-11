@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>박람회 체크리스트</title>
+<style>
+  :root {
+    --pink: #ff8fc0;
+    --pink-light: #ffe6f2;
+    --text: #2c2638;
+    --muted: #8a8294;
+    --border: #ecd9e4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: #fff8fb;
+    color: var(--text);
+    margin: 0;
+    padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 4px 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 4px; }
+  label:first-child { margin-top: 0; }
+  input[type="text"], input[type="date"] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 14px; font-family: inherit;
+  }
+  button {
+    background: var(--pink); color: #fff; border: none; border-radius: 10px;
+    padding: 11px 16px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%;
+    margin-top: 14px;
+  }
+  button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); margin-top: 8px; }
+  button.small { width: auto; font-size: 12px; padding: 6px 12px; margin: 0; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .error { color: #d6336c; font-size: 13px; margin-top: 8px; }
+  .bar-track { background: var(--border); border-radius: 999px; height: 10px; overflow: hidden; margin-top: 10px; }
+  .bar-fill { background: var(--pink); height: 100%; width: 0%; transition: width .2s; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tab {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 12px; font-size: 13px; cursor: pointer;
+  }
+  .tab.active { background: var(--pink); color: #fff; border-color: var(--pink); }
+  .item-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .item-row input[type="checkbox"] { width: auto; margin: 0; flex-shrink: 0; }
+  .item-row .txt { flex: 1; cursor: text; font-size: 14px; }
+  .item-row .txt.done { text-decoration: line-through; color: var(--muted); }
+  .item-row button { width: 30px; height: 30px; padding: 0; font-size: 11px; flex-shrink: 0; margin: 0; }
+  .item-row button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; }
+  .link-box {
+    display: flex; gap: 8px; align-items: center; background: var(--pink-light);
+    border-radius: 10px; padding: 10px 12px; font-size: 13px; word-break: break-all;
+  }
+  .link-box code { flex: 1; }
+  .copied { color: #2b8a3e; font-size: 12px; margin-top: 4px; }
+  .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎪 박람회 체크리스트</h1>
+      <div class="sub">박람회 준비물을 카테고리별로 체크하고, 행사마다 링크로 따로 관리하세요.</div>
+    </header>
+
+    <!-- 새로 만들기 화면 -->
+    <div id="view-create">
+      <div class="card">
+        <label>행사명 *</label>
+        <input type="text" id="cr-name" placeholder="예: 2027 서울 펫페어" />
+        <label>기간 시작</label>
+        <input type="date" id="cr-start" />
+        <label>기간 종료 (선택)</label>
+        <input type="date" id="cr-end" />
+        <label>장소 (선택)</label>
+        <input type="text" id="cr-location" />
+        <label>부스 수 (선택)</label>
+        <input type="text" id="cr-booth" placeholder="예: 2부스" />
+        <button id="cr-submit">체크리스트 만들기</button>
+        <div class="error" id="cr-error"></div>
+      </div>
+      <div class="hint" style="text-align:center">
+        로그인이 없어서, 만들고 나면 생기는 <b>링크를 꼭 저장(북마크/공유)</b>해두셔야 다시 들어올 수 있어요.
+      </div>
+    </div>
+
+    <!-- 상세 화면 -->
+    <div id="view-detail" style="display:none">
+      <div class="card" id="link-reminder" style="display:none">
+        <div class="hint" style="margin-top:0">이 체크리스트 주소 — 꼭 저장해두세요</div>
+        <div class="link-box">
+          <code id="dt-link"></code>
+          <button class="secondary small" id="dt-copy">복사</button>
+        </div>
+        <div class="copied" id="dt-copied" style="display:none">복사했어요!</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="font-size:18px;font-weight:800" id="dt-name">-</div>
+          <button class="secondary small" id="dt-edit-toggle">정보 수정</button>
+        </div>
+        <div class="hint" id="dt-meta">-</div>
+        <div class="bar-track"><div class="bar-fill" id="dt-bar"></div></div>
+        <div class="hint" id="dt-progress-text">0/0 완료 (0%)</div>
+
+        <div id="dt-edit-form" style="display:none;margin-top:14px">
+          <label>행사명</label>
+          <input type="text" id="ed-name" />
+          <label>기간 시작</label>
+          <input type="date" id="ed-start" />
+          <label>기간 종료 (선택)</label>
+          <input type="date" id="ed-end" />
+          <label>장소 (선택)</label>
+          <input type="text" id="ed-location" />
+          <label>부스 수 (선택)</label>
+          <input type="text" id="ed-booth" />
+          <button id="ed-save">저장</button>
+        </div>
+
+        <div style="margin-top:14px">
+          <div class="hint" style="margin-top:0">다음 행사로 복제해서 새로 시작하기 (완료 체크만 초기화, 새 링크 발급)</div>
+          <button class="secondary small" id="dup-toggle">복제하기</button>
+          <div id="dup-form" style="display:none;margin-top:10px">
+            <label>새 행사명</label>
+            <input type="text" id="dup-name" />
+            <label>기간 시작 (선택)</label>
+            <input type="date" id="dup-start" />
+            <label>기간 종료 (선택)</label>
+            <input type="date" id="dup-end" />
+            <button id="dup-submit">복제해서 새 체크리스트 만들기</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:10px">
+        <div class="tabs" id="cat-tabs"></div>
+      </div>
+
+      <div class="card">
+        <div id="items-body"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input type="text" id="new-item-text" placeholder="새 항목 입력" style="flex:1" />
+          <button class="small" id="new-item-add" style="white-space:nowrap">추가</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">박람회 체크리스트 · 누구나 사용 가능, 로그인 없음</div>
+  </div>
+
+<script>
+  const API = "/api/events";
+  let currentSlug = null;
+  let currentEvent = null;
+  let currentCatId = "contract";
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function slugFromPath() {
+    const m = location.pathname.match(/^\/e\/([a-zA-Z0-9]+)/);
+    return m ? m[1] : null;
+  }
+
+  async function init() {
+    const slug = slugFromPath();
+    if (slug) {
+      currentSlug = slug;
+      document.getElementById("view-create").style.display = "none";
+      document.getElementById("view-detail").style.display = "block";
+      // 방금 만들어서 넘어온 경우만 링크 저장 안내 표시
+      if (sessionStorage.getItem("justCreated") === slug) {
+        document.getElementById("link-reminder").style.display = "block";
+        document.getElementById("dt-link").textContent = location.origin + "/e/" + slug;
+        sessionStorage.removeItem("justCreated");
+      }
+      await refreshDetail();
+    }
+  }
+
+  // ===== 새로 만들기 =====
+  document.getElementById("cr-submit").addEventListener("click", async () => {
+    const name = document.getElementById("cr-name").value.trim();
+    const errEl = document.getElementById("cr-error");
+    if (!name) { errEl.textContent = "행사명을 입력해주세요."; return; }
+    const payload = {
+      name,
+      startDate: document.getElementById("cr-start").value,
+      endDate: document.getElementById("cr-end").value,
+      location: document.getElementById("cr-location").value.trim(),
+      boothCount: document.getElementById("cr-booth").value.trim(),
+    };
+    try {
+      const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = "❌ " + (data.error || "생성 실패"); return; }
+      sessionStorage.setItem("justCreated", data.event.slug);
+      location.href = "/e/" + data.event.slug;
+    } catch (err) {
+      errEl.textContent = "❌ 오류: " + err.message;
+    }
+  });
+
+  // ===== 상세 화면 =====
+  async function refreshDetail() {
+    try {
+      const res = await fetch(`${API}/${currentSlug}`);
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("view-detail").innerHTML = `<div class="card">❌ ${escapeHtml(data.error || "불러오기 실패")}</div>`;
+        return;
+      }
+      currentEvent = data.event;
+      renderDetail();
+    } catch (err) {
+      alert("오류: " + err.message);
+    }
+  }
+
+  function renderDetail() {
+    const ev = currentEvent;
+    const progress = (() => {
+      let total = 0, done = 0;
+      ev.categories.forEach((c) => { total += c.items.length; done += c.items.filter((it) => it.done).length; });
+      return { total, done, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
+    })();
+    document.getElementById("dt-name").textContent = ev.name;
+    const period = [ev.startDate, ev.endDate].filter(Boolean).join(" ~ ");
+    document.getElementById("dt-meta").textContent = [period, ev.location, ev.boothCount].filter(Boolean).join(" · ") || "-";
+    document.getElementById("dt-bar").style.width = progress.percent + "%";
+    document.getElementById("dt-progress-text").textContent = `${progress.done}/${progress.total} 완료 (${progress.percent}%)`;
+
+    const tabsEl = document.getElementById("cat-tabs");
+    tabsEl.innerHTML = "";
+    ev.categories.forEach((c) => {
+      const catDone = c.items.filter((it) => it.done).length;
+      const btn = document.createElement("button");
+      btn.className = "tab" + (c.id === currentCatId ? " active" : "");
+      btn.textContent = `${c.name} (${catDone}/${c.items.length})`;
+      btn.addEventListener("click", () => { currentCatId = c.id; renderDetail(); });
+      tabsEl.appendChild(btn);
+    });
+
+    const cat = ev.categories.find((c) => c.id === currentCatId);
+    const itemsBody = document.getElementById("items-body");
+    itemsBody.innerHTML = "";
+    cat.items.forEach((it, idx) => {
+      const row = document.createElement("div");
+      row.className = "item-row";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = it.done;
+      cb.addEventListener("change", () => toggleItem(cat.id, it.id, cb.checked));
+
+      const textEl = document.createElement("span");
+      textEl.className = "txt" + (it.done ? " done" : "");
+      textEl.textContent = it.text;
+      textEl.addEventListener("click", () => startEditItem(cat.id, it, textEl));
+
+      const upBtn = document.createElement("button");
+      upBtn.className = "secondary";
+      upBtn.textContent = "▲";
+      upBtn.disabled = idx === 0;
+      upBtn.addEventListener("click", () => moveItem(cat, idx, -1));
+
+      const downBtn = document.createElement("button");
+      downBtn.className = "secondary";
+      downBtn.textContent = "▼";
+      downBtn.disabled = idx === cat.items.length - 1;
+      downBtn.addEventListener("click", () => moveItem(cat, idx, 1));
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "del";
+      delBtn.textContent = "삭제";
+      delBtn.addEventListener("click", () => deleteItem(cat.id, it.id));
+
+      row.append(cb, textEl, upBtn, downBtn, delBtn);
+      itemsBody.appendChild(row);
+    });
+  }
+
+  async function toggleItem(catId, itemId, done) {
+    await fetch(`${API}/${currentSlug}/categories/${catId}/items/${itemId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done }),
+    });
+    await refreshDetail();
+  }
+
+  function startEditItem(catId, item, textEl) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = item.text;
+    input.style.flex = "1";
+    const finish = async () => {
+      const v = input.value.trim();
+      if (v && v !== item.text) {
+        await fetch(`${API}/${currentSlug}/categories/${catId}/items/${item.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: v }),
+        });
+      }
+      await refreshDetail();
+    };
+    input.addEventListener("blur", finish);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+    textEl.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  async function deleteItem(catId, itemId) {
+    if (!confirm("이 항목을 삭제할까요?")) return;
+    await fetch(`${API}/${currentSlug}/categories/${catId}/items/${itemId}`, { method: "DELETE" });
+    await refreshDetail();
+  }
+
+  async function moveItem(cat, idx, dir) {
+    const ids = cat.items.map((it) => it.id);
+    const target = idx + dir;
+    if (target < 0 || target >= ids.length) return;
+    [ids[idx], ids[target]] = [ids[target], ids[idx]];
+    await fetch(`${API}/${currentSlug}/categories/${cat.id}/reorder`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemIds: ids }),
+    });
+    await refreshDetail();
+  }
+
+  document.getElementById("new-item-add").addEventListener("click", async () => {
+    const input = document.getElementById("new-item-text");
+    const text = input.value.trim();
+    if (!text) return;
+    await fetch(`${API}/${currentSlug}/categories/${currentCatId}/items`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+    });
+    input.value = "";
+    await refreshDetail();
+  });
+
+  document.getElementById("dt-copy").addEventListener("click", () => {
+    navigator.clipboard.writeText(document.getElementById("dt-link").textContent).then(() => {
+      const el = document.getElementById("dt-copied");
+      el.style.display = "block";
+      setTimeout(() => { el.style.display = "none"; }, 1500);
+    });
+  });
+
+  document.getElementById("dt-edit-toggle").addEventListener("click", () => {
+    const form = document.getElementById("dt-edit-form");
+    if (form.style.display === "none") {
+      document.getElementById("ed-name").value = currentEvent.name;
+      document.getElementById("ed-start").value = currentEvent.startDate || "";
+      document.getElementById("ed-end").value = currentEvent.endDate || "";
+      document.getElementById("ed-location").value = currentEvent.location || "";
+      document.getElementById("ed-booth").value = currentEvent.boothCount || "";
+      form.style.display = "block";
+    } else {
+      form.style.display = "none";
+    }
+  });
+
+  document.getElementById("ed-save").addEventListener("click", async () => {
+    const payload = {
+      name: document.getElementById("ed-name").value.trim(),
+      startDate: document.getElementById("ed-start").value,
+      endDate: document.getElementById("ed-end").value,
+      location: document.getElementById("ed-location").value.trim(),
+      boothCount: document.getElementById("ed-booth").value.trim(),
+    };
+    if (!payload.name) { alert("행사명을 입력해주세요."); return; }
+    await fetch(`${API}/${currentSlug}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    document.getElementById("dt-edit-form").style.display = "none";
+    await refreshDetail();
+  });
+
+  document.getElementById("dup-toggle").addEventListener("click", () => {
+    const form = document.getElementById("dup-form");
+    if (form.style.display === "none") {
+      document.getElementById("dup-name").value = currentEvent.name + " (다음 행사)";
+      form.style.display = "block";
+    } else {
+      form.style.display = "none";
+    }
+  });
+
+  document.getElementById("dup-submit").addEventListener("click", async () => {
+    const newName = document.getElementById("dup-name").value.trim();
+    if (!newName) { alert("새 행사명을 입력해주세요."); return; }
+    const payload = {
+      newName,
+      startDate: document.getElementById("dup-start").value,
+      endDate: document.getElementById("dup-end").value,
+    };
+    try {
+      const res = await fetch(`${API}/${currentSlug}/duplicate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "복제 실패"); return; }
+      sessionStorage.setItem("justCreated", data.event.slug);
+      location.href = "/e/" + data.event.slug;
+    } catch (err) {
+      alert("오류: " + err.message);
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>
