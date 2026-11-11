@@ -623,19 +623,19 @@
     });
     addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addBtn.click(); });
     addRow.append(addInput, addBtn);
-    if (naverEnabled) {
-      const naverBtn = document.createElement("button");
-      naverBtn.className = "small inv-naver-btn";
-      naverBtn.textContent = "스마트스토어에서 상품 불러오기";
-      naverBtn.addEventListener("click", () => {
-        const box = document.getElementById("inv-naver-box");
-        box.style.display = box.style.display === "none" ? "block" : "none";
-      });
-      addRow.appendChild(naverBtn);
-    }
+    // 버튼은 항상 보이게 두고(연동 설정 전이어도 화면에서 바로 확인 가능하도록),
+    // 실제 연동이 안 돼 있으면 검색 시도할 때 서버가 안내 메시지를 내려줌.
+    const naverBtn = document.createElement("button");
+    naverBtn.className = "small inv-naver-btn";
+    naverBtn.textContent = "스마트스토어에서 상품 불러오기";
+    naverBtn.addEventListener("click", () => {
+      const box = document.getElementById("inv-naver-box");
+      box.style.display = box.style.display === "none" ? "block" : "none";
+    });
+    addRow.appendChild(naverBtn);
     container.appendChild(addRow);
 
-    if (naverEnabled) container.appendChild(buildNaverImportBox());
+    container.appendChild(buildNaverImportBox());
 
     // 필터 적용
     const visibleItems = items.filter((it) => {
@@ -1306,6 +1306,7 @@
       if (big) return; // 모달은 이미지 있을 때만 열림
       targetEl.innerHTML = `
         <div class="hint" style="margin-top:0">아직 배치도가 없어요. 공식 홈페이지 이미지 링크를 넣거나, 파일을 업로드해주세요.</div>
+        <button class="secondary small" id="fp-auto-find" style="margin-bottom:10px">🔎 공식 배치도 자동으로 찾기 (준비중)</button>
         <label>이미지 링크(URL)</label>
         <div style="display:flex;gap:8px">
           <input type="text" id="fp-url-input" placeholder="https://..." style="flex:1" />
@@ -1314,6 +1315,9 @@
         <label>또는 파일 업로드</label>
         <input type="file" id="fp-file-input" accept="image/*" />
       `;
+      targetEl.querySelector("#fp-auto-find").addEventListener("click", () => {
+        alert("준비 중인 기능이에요. 지금은 위에서 이미지 링크나 파일을 직접 올려주세요.");
+      });
       wireFloorPlanUploadControls(targetEl);
       return;
     }
@@ -1359,6 +1363,14 @@
       bigBtn.textContent = "🔍 크게 보기";
       bigBtn.addEventListener("click", () => openFloorPlanModal());
       actions.appendChild(bigBtn);
+
+      const autoMarkBtn = document.createElement("button");
+      autoMarkBtn.className = "secondary";
+      autoMarkBtn.textContent = "🤖 부스 번호 자동 인식 (준비중)";
+      autoMarkBtn.addEventListener("click", () => {
+        alert("준비 중인 기능이에요. 지금은 배치도를 탭/클릭해서 직접 위치를 표시해주세요.");
+      });
+      actions.appendChild(autoMarkBtn);
 
       if (typeof fp.markerX === "number") {
         const clearMarkerBtn = document.createElement("button");
