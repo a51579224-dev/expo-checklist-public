@@ -85,13 +85,14 @@
         <label>행사 기간</label>
         <input type="text" id="cr-period" placeholder="기간 선택" readonly />
         <label>장소 (선택)</label>
-        <input type="text" id="cr-location" />
+        <input type="text" id="cr-location" list="expo-location-options" placeholder="장소 선택 또는 직접 입력" autocomplete="off" />
         <label>부스 번호 (선택)</label>
         <input type="text" id="cr-booth" placeholder="예: A-12" />
         <button id="cr-submit">체크리스트 만들기</button>
         <div class="error" id="cr-error"></div>
       </div>
       <datalist id="expo-name-options"></datalist>
+      <datalist id="expo-location-options"></datalist>
       <div class="hint" style="text-align:center">
         로그인이 없어서, 만들고 나면 생기는 <b>링크를 꼭 저장(북마크/공유)</b>해두셔야 다시 들어올 수 있어요.
       </div>
@@ -123,7 +124,7 @@
           <label>행사 기간</label>
           <input type="text" id="ed-period" placeholder="기간 선택" readonly />
           <label>장소 (선택)</label>
-          <input type="text" id="ed-location" />
+          <input type="text" id="ed-location" list="expo-location-options" autocomplete="off" />
           <label>부스 번호 (선택)</label>
           <input type="text" id="ed-booth" />
           <button id="ed-save">저장</button>
@@ -168,16 +169,40 @@
   const EXPO_NAME_OPTIONS = [
     "궁디팡팡 캣페스타",
     "냥냥펀치 캣쇼",
-    "메가주",
+    "메가주 (상)",
+    "메가주 (하)",
     "가낳지모 캣페어",
     "마이캣페어",
     "케이펫페어",
     "서울펫쇼",
   ];
+  const EXPO_NAME_OTHER = "기타 (직접 입력)";
+
+  const EXPO_LOCATION_OPTIONS = [
+    "킨텍스",
+    "AT센터",
+    "세텍",
+    "부산 벡스코",
+    "대구 엑스코",
+    "대전컨벤션센터",
+    "수원메쎄",
+  ];
 
   function populateExpoNameOptions() {
     const dl = document.getElementById("expo-name-options");
-    dl.innerHTML = EXPO_NAME_OPTIONS.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
+    dl.innerHTML = [...EXPO_NAME_OPTIONS, EXPO_NAME_OTHER].map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
+  }
+
+  function populateExpoLocationOptions() {
+    const dl = document.getElementById("expo-location-options");
+    dl.innerHTML = EXPO_LOCATION_OPTIONS.map((loc) => `<option value="${escapeHtml(loc)}"></option>`).join("");
+  }
+
+  // "기타 (직접 입력)"를 고르면 그 글자가 그대로 남지 않도록 비워서 바로 타이핑할 수 있게 함.
+  function wireExpoNameOtherClear(inputEl) {
+    inputEl.addEventListener("input", () => {
+      if (inputEl.value === EXPO_NAME_OTHER) inputEl.value = "";
+    });
   }
 
   function fmtDot(iso) {
@@ -217,6 +242,9 @@
 
   async function init() {
     populateExpoNameOptions();
+    populateExpoLocationOptions();
+    wireExpoNameOtherClear(document.getElementById("cr-name"));
+    wireExpoNameOtherClear(document.getElementById("ed-name"));
     attachRangePicker(document.getElementById("cr-period"), "", "", (s, e) => { crRange = { start: s, end: e }; });
     const slug = slugFromPath();
     if (slug) {
