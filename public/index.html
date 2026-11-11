@@ -126,6 +126,30 @@
   .inv-checks input[type="checkbox"] { width: auto; margin: 0; }
   .inv-note { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; }
   .inv-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+
+  /* 집기: 분류(그룹)별로 묶어서 보기 */
+  .sup-section-title { font-weight: 800; font-size: 15px; margin: 18px 0 10px; }
+  .sup-section-title:first-child { margin-top: 0; }
+  .sup-group { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .sup-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .sup-group-head .name { font-weight: 700; font-size: 14px; }
+  .sup-group-head .count { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .sup-group-head button.del-group { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 28px; margin: 0; font-size: 12px; }
+  .sup-item-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .sup-item-row:last-of-type { border-bottom: none; }
+  .sup-item-row input[type="checkbox"] { width: auto; margin: 0; flex-shrink: 0; }
+  .sup-item-row .txt { flex: 1; cursor: text; font-size: 14px; min-width: 90px; }
+  .sup-item-row .txt.done { text-decoration: line-through; color: var(--muted); }
+  .sup-item-row input[type="number"] {
+    width: 56px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; flex-shrink: 0;
+  }
+  .sup-item-row .unit { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .sup-item-row button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 28px; margin: 0; flex-shrink: 0; font-size: 12px; }
+  .sup-add-row { display: flex; gap: 8px; margin-top: 8px; }
+  .sup-add-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
+  .sup-add-row button { width: auto; margin: 0; font-size: 12px; padding: 7px 12px; white-space: nowrap; }
+  .sup-new-group { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; }
+  .sup-new-group .sup-add-row input { min-width: 0; }
 </style>
 </head>
 <body>
@@ -425,6 +449,11 @@
       renderInventoryPanel(itemsBody, cat);
       return;
     }
+    if (cat.id === "supplies") {
+      addItemRow.style.display = "none";
+      renderSuppliesPanel(itemsBody, cat);
+      return;
+    }
     addItemRow.style.display = "flex";
 
     cat.items.forEach((it, idx) => {
@@ -659,6 +688,146 @@
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields),
     });
     await refreshDetail();
+  }
+
+  // ===== 집기 탭: 분류(그룹)별로 묶어서 품목·수량·준비완료 관리 =====
+  const SUPPLIES_FIXED_GROUPS = ["부스 꾸미기", "작업 도구", "전기용품"];
+
+  async function addSuppliesItem(group, textInput) {
+    const text = textInput.value.trim();
+    if (!text) return;
+    await fetch(`${API}/${currentSlug}/categories/supplies/items`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, group }),
+    });
+    await refreshDetail();
+  }
+
+  function buildGroupAddRow(groupName) {
+    const row = document.createElement("div");
+    row.className = "sup-add-row";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "품목명";
+    const btn = document.createElement("button");
+    btn.className = "small";
+    btn.textContent = "+ 품목 추가";
+    btn.addEventListener("click", () => addSuppliesItem(groupName, input));
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") btn.click(); });
+    row.append(input, btn);
+    return row;
+  }
+
+  function buildSuppliesItemRow(it) {
+    const row = document.createElement("div");
+    row.className = "sup-item-row";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!it.done;
+    cb.addEventListener("change", () => toggleItem("supplies", it.id, cb.checked));
+
+    const textEl = document.createElement("span");
+    textEl.className = "txt" + (it.done ? " done" : "");
+    textEl.textContent = it.text;
+    textEl.addEventListener("click", () => startEditItem("supplies", it, textEl));
+
+    const qtyInput = document.createElement("input");
+    qtyInput.type = "number";
+    qtyInput.min = "0";
+    qtyInput.placeholder = "수량";
+    if (it.qty !== null && it.qty !== undefined) qtyInput.value = it.qty;
+    qtyInput.addEventListener("change", async () => {
+      await fetch(`${API}/${currentSlug}/categories/supplies/items/${it.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qty: qtyInput.value }),
+      });
+      await refreshDetail();
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "del";
+    delBtn.textContent = "삭제";
+    delBtn.addEventListener("click", () => deleteItem("supplies", it.id));
+
+    row.append(cb, textEl, qtyInput, span("unit", "개"), delBtn);
+    return row;
+  }
+
+  function buildSuppliesGroupSection(groupName, items, { deletable = false } = {}) {
+    const box = document.createElement("div");
+    box.className = "sup-group";
+    const done = items.filter((it) => it.done).length;
+
+    const head = document.createElement("div");
+    head.className = "sup-group-head";
+    head.innerHTML = `<span class="name">${escapeHtml(groupName)}<span class="count">(${done}/${items.length})</span></span>`;
+    if (deletable) {
+      const delGroupBtn = document.createElement("button");
+      delGroupBtn.className = "del-group";
+      delGroupBtn.textContent = "분류 삭제";
+      delGroupBtn.addEventListener("click", async () => {
+        if (!confirm(`'${groupName}' 분류와 그 안의 품목 ${items.length}개를 전부 삭제할까요?`)) return;
+        for (const it of items) {
+          await fetch(`${API}/${currentSlug}/categories/supplies/items/${it.id}`, { method: "DELETE" });
+        }
+        await refreshDetail();
+      });
+      head.appendChild(delGroupBtn);
+    }
+    box.appendChild(head);
+
+    items.forEach((it) => box.appendChild(buildSuppliesItemRow(it)));
+    box.appendChild(buildGroupAddRow(groupName));
+    return box;
+  }
+
+  function renderSuppliesPanel(container, cat) {
+    const byGroup = new Map();
+    cat.items.forEach((it) => {
+      const g = it.group || "기타";
+      if (!byGroup.has(g)) byGroup.set(g, []);
+      byGroup.get(g).push(it);
+    });
+
+    // 고정 분류(어느 브랜드든 공통) — 품목이 없어도 항상 보여줌
+    SUPPLIES_FIXED_GROUPS.forEach((g) => {
+      container.appendChild(buildSuppliesGroupSection(g, byGroup.get(g) || [], { deletable: false }));
+      byGroup.delete(g);
+    });
+
+    // 상품별 진열 집기 — 브랜드가 +/-로 직접 만드는 영역
+    const displayTitle = document.createElement("div");
+    displayTitle.className = "sup-section-title";
+    displayTitle.textContent = "상품별 진열 집기";
+    container.appendChild(displayTitle);
+
+    byGroup.forEach((items, groupName) => {
+      container.appendChild(buildSuppliesGroupSection(groupName, items, { deletable: true }));
+    });
+
+    // 새 분류(상품군) 추가
+    const newGroupBox = document.createElement("div");
+    newGroupBox.className = "sup-new-group";
+    const groupNameInput = document.createElement("input");
+    groupNameInput.type = "text";
+    groupNameInput.placeholder = "새 분류명 (예: 식기)";
+    groupNameInput.style.marginBottom = "8px";
+    const itemRow = document.createElement("div");
+    itemRow.className = "sup-add-row";
+    const itemNameInput = document.createElement("input");
+    itemNameInput.type = "text";
+    itemNameInput.placeholder = "첫 품목명";
+    const addGroupBtn = document.createElement("button");
+    addGroupBtn.className = "small";
+    addGroupBtn.textContent = "+ 분류 추가";
+    addGroupBtn.addEventListener("click", async () => {
+      const groupName = groupNameInput.value.trim();
+      const text = itemNameInput.value.trim();
+      if (!groupName || !text) { alert("분류명과 첫 품목명을 모두 입력해주세요."); return; }
+      await addSuppliesItem(groupName, itemNameInput);
+    });
+    itemRow.append(itemNameInput, addGroupBtn);
+    newGroupBox.append(groupNameInput, itemRow);
+    container.appendChild(newGroupBox);
   }
 
   // ===== 행사 계약 탭: 부스위치 / 배치도+마커 / 차량 입차시간 =====

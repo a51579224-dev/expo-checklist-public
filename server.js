@@ -41,13 +41,21 @@ const DEFAULT_TEMPLATE_ITEMS = {
   // 2026-11-11: '상품 재고'도 고정 체크리스트 문구 대신, 행사마다 품목을 직접 입력하는
   // 수량(CTN/PC)+준비완료+차량적재완료 전용 화면으로 바뀌어서 기본 항목을 비워둠.
   inventory: [],
+  // 2026-11-11: '집기'도 체크리스트 문구 나열 대신, 분류(그룹)별로 묶어서 한눈에 보는 화면으로 바뀜.
+  // "부스 꾸미기"/"작업 도구"/"전기용품"은 어느 브랜드든 공통으로 쓰는 고정 분류 — 기본 품목을 미리 채워둠.
+  // "상품별 진열 집기"는 분류 자체를 브랜드가 +/-로 직접 만드는 영역이라 공통 템플릿엔 비워둠.
   supplies: [
-    "테이블·선반·진열대 준비",
-    "현수막·가격표·안내물 준비",
-    "리플렛·쇼핑백·포장재 준비",
-    "결제 단말기·충전기·멀티탭 준비",
-    "가위·테이프·케이블타이 등 비품 준비",
-    "집기 포장 및 차량 적재 확인",
+    { group: "부스 꾸미기", text: "테이블" },
+    { group: "부스 꾸미기", text: "벽면 장식물" },
+    { group: "부스 꾸미기", text: "간판" },
+    { group: "부스 꾸미기", text: "테이블보" },
+    { group: "부스 꾸미기", text: "테이블 현수막" },
+    { group: "작업 도구", text: "가위" },
+    { group: "작업 도구", text: "테이프" },
+    { group: "작업 도구", text: "테이프 커터기" },
+    { group: "작업 도구", text: "매직" },
+    { group: "작업 도구", text: "볼펜" },
+    { group: "전기용품", text: "멀티탭" },
   ],
   operation: [
     "부스 설치 및 상품 진열",
@@ -79,7 +87,13 @@ function buildDefaultCategories() {
   return CHECKLIST_CATEGORIES.map((c) => ({
     id: c.id,
     name: c.name,
-    items: DEFAULT_TEMPLATE_ITEMS[c.id].map((text) => ({ id: newId("item"), text, done: false })),
+    items: DEFAULT_TEMPLATE_ITEMS[c.id].map((entry) => {
+      const isObj = typeof entry === "object" && entry !== null;
+      const item = { id: newId("item"), text: isObj ? entry.text : entry, done: false };
+      if (isObj && entry.group) item.group = entry.group;
+      if (isObj && entry.qty !== undefined) item.qty = entry.qty;
+      return item;
+    }),
   }));
 }
 
@@ -87,11 +101,13 @@ function cloneCategories(categories) {
   return categories.map((c) => ({
     id: c.id,
     name: c.name,
-    // 품목(text)과 '준비 예정' 계획 수량은 그대로 가져오되, 완료/적재 체크와 실제 확인 수량·메모는 초기화.
+    // 품목(text)과 '준비 예정' 계획 수량·분류는 그대로 가져오되, 완료/적재 체크와 실제 확인 수량·메모는 초기화.
     items: c.items.map((it) => ({
       id: newId("item"),
       text: it.text,
       done: false,
+      ...(it.group !== undefined ? { group: it.group } : {}),
+      ...(it.qty !== undefined ? { qty: it.qty } : {}),
       ...(it.loaded !== undefined ? { loaded: false } : {}),
       ...(it.ctnPlanned !== undefined ? { ctnPlanned: it.ctnPlanned } : {}),
       ...(it.pcPlanned !== undefined ? { pcPlanned: it.pcPlanned } : {}),
@@ -296,9 +312,9 @@ app.post("/api/events/:slug/duplicate", async (req, res) => {
   }
 });
 
-// 항목 추가
+// 항목 추가 — '집기'의 경우 group을 같이 보내면 그 분류 소속으로 추가됨
 app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
-  const { text } = req.body ?? {};
+  const { text, group } = req.body ?? {};
   if (!text || !text.trim()) return res.status(400).json({ error: "항목 내용을 입력해주세요." });
   try {
     const row = await getEventRow(req.params.slug);
@@ -306,6 +322,7 @@ app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
     const ev = rowToEvent(row);
     const cat = findCategory(ev, req.params.catId);
     const item = { id: newId("item"), text: text.trim(), done: false };
+    if (group && group.trim()) item.group = group.trim();
     cat.items.push(item);
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
     res.json({ item, progress: computeProgress(ev.categories) });
@@ -322,9 +339,9 @@ function normalizeQty(v) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-// 항목 수정 — 이름 변경, 완료/적재 체크 토글, '상품 재고' 전용 수량·메모 필드(있을 때만 반영)
+// 항목 수정 — 이름 변경, 완료/적재 체크 토글, '상품 재고'/'집기' 전용 수량·분류·메모 필드(있을 때만 반영)
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
-  const { text, done, loaded, ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, note } = req.body ?? {};
+  const { text, done, loaded, group, qty, ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, note } = req.body ?? {};
   try {
     const row = await getEventRow(req.params.slug);
     if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
@@ -338,6 +355,8 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
     }
     if (done !== undefined) item.done = !!done;
     if (loaded !== undefined) item.loaded = !!loaded;
+    if (group !== undefined) item.group = String(group).trim();
+    if (qty !== undefined) item.qty = normalizeQty(qty);
     if (ctnPlanned !== undefined) item.ctnPlanned = normalizeQty(ctnPlanned);
     if (pcPlanned !== undefined) item.pcPlanned = normalizeQty(pcPlanned);
     if (boxQty !== undefined) item.boxQty = normalizeQty(boxQty);
