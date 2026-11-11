@@ -20,7 +20,7 @@ const pool = new pg.Pool({
 });
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "12mb" })); // 배치도 이미지(base64)가 들어갈 수 있어서 넉넉하게
 app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 4100;
@@ -34,14 +34,10 @@ const CHECKLIST_CATEGORIES = [
 ];
 
 const DEFAULT_TEMPLATE_ITEMS = {
-  contract: [
-    "참가 신청 및 계약 확인",
-    "부스비·잔금 결제 확인",
-    "부스 번호 및 위치 확인",
-    "전기·기본 집기 신청 확인",
-    "출입증·반입 규정 확인",
-    "물류 차량 및 반입 일정 확인",
-  ],
+  // 2026-11-11: '행사 계약' 탭은 체크리스트 대신 부스위치/배치도/차량입차시간 전용 화면으로 바뀌어서
+  // 새 행사엔 더 이상 항목을 넣지 않음. 예전 행사에 이미 저장된 계약 체크리스트 항목은
+  // DB에서 지우지 않고 그대로 두되(복구 가능), 화면에서만 안 보이게 처리함.
+  contract: [],
   inventory: [
     "참가 제품 목록 확정",
     "제품별 판매 수량 확인",
@@ -106,8 +102,11 @@ function computeProgress(categories) {
   const byCategory = categories.map((c) => {
     const catTotal = c.items.length;
     const catDone = c.items.filter((it) => it.done).length;
-    total += catTotal;
-    done += catDone;
+    // '행사 계약'은 더 이상 체크리스트가 아니라서(예전 데이터만 남아있을 수 있음) 전체 진행률 계산엔 안 넣음.
+    if (c.id !== "contract") {
+      total += catTotal;
+      done += catDone;
+    }
     return { id: c.id, name: c.name, total: catTotal, done: catDone };
   });
   return { total, done, percent: total === 0 ? 0 : Math.round((done / total) * 100), byCategory };
@@ -121,6 +120,9 @@ function rowToEvent(row) {
     endDate: row.end_date || "",
     location: row.location || "",
     boothCount: row.booth_count || "",
+    boothLocation: row.booth_location || "",
+    floorPlan: row.floor_plan || null,
+    vehicleAccess: row.vehicle_access || null,
     categories: row.categories,
     createdAt: row.created_at,
   };
@@ -176,7 +178,7 @@ app.get("/api/events/:slug", async (req, res) => {
 
 // 행사 기본정보 수정
 app.put("/api/events/:slug", async (req, res) => {
-  const { name, startDate, endDate, location, boothCount } = req.body ?? {};
+  const { name, startDate, endDate, location, boothCount, boothLocation } = req.body ?? {};
   try {
     const row = await getEventRow(req.params.slug);
     if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
@@ -187,9 +189,65 @@ app.put("/api/events/:slug", async (req, res) => {
          end_date = coalesce($4, end_date),
          location = coalesce($5, location),
          booth_count = coalesce($6, booth_count),
+         booth_location = coalesce($7, booth_location),
          updated_at = now()
        where slug = $1 returning *`,
-      [req.params.slug, name?.trim(), startDate, endDate, location?.trim(), boothCount?.trim()]
+      [req.params.slug, name?.trim(), startDate, endDate, location?.trim(), boothCount?.trim(), boothLocation?.trim()]
+    );
+    res.json({ event: rowToEvent(rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// 부스 배치도 등록/수정 — 이미지(업로드 base64 또는 외부 URL)와 마커 위치(이미지 기준 0~1 상대좌표)를 통째로 교체.
+app.put("/api/events/:slug/floor-plan", async (req, res) => {
+  const { imageUrl, imageDataUrl, markerX, markerY } = req.body ?? {};
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const floorPlan = {
+      imageUrl: imageUrl || null,
+      imageDataUrl: imageDataUrl || null,
+      markerX: typeof markerX === "number" ? markerX : null,
+      markerY: typeof markerY === "number" ? markerY : null,
+    };
+    const { rows } = await pool.query(
+      "update events set floor_plan = $2::jsonb, updated_at = now() where slug = $1 returning *",
+      [req.params.slug, JSON.stringify(floorPlan)]
+    );
+    res.json({ event: rowToEvent(rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// 배치도 삭제(이미지+마커 전부 제거)
+app.delete("/api/events/:slug/floor-plan", async (req, res) => {
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const { rows } = await pool.query(
+      "update events set floor_plan = null, updated_at = now() where slug = $1 returning *",
+      [req.params.slug]
+    );
+    res.json({ event: rowToEvent(rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// 차량 입차 가능 시간 등록/수정
+app.put("/api/events/:slug/vehicle-access", async (req, res) => {
+  const { date, startTime, endTime } = req.body ?? {};
+  if (!date || !endTime) return res.status(400).json({ error: "반입 날짜와 입차 마감 시간은 필수예요." });
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const vehicleAccess = { date, startTime: startTime || "", endTime };
+    const { rows } = await pool.query(
+      "update events set vehicle_access = $2::jsonb, updated_at = now() where slug = $1 returning *",
+      [req.params.slug, JSON.stringify(vehicleAccess)]
     );
     res.json({ event: rowToEvent(rows[0]) });
   } catch (err) {

@@ -15,3 +15,9 @@ create table if not exists events (
 );
 
 create index if not exists events_slug_idx on events (slug);
+
+-- 2026-11-11: '행사 계약' 탭 개편 — 부스 위치/배치도+마커/차량 입차시간
+alter table events
+  add column if not exists booth_location text default '',
+  add column if not exists floor_plan jsonb default null,
+  add column if not exists vehicle_access jsonb default null;

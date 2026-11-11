@@ -68,6 +68,34 @@
   .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
   .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background: var(--pink); border-color: var(--pink); }
   .flatpickr-day.inRange { background: var(--pink-light); border-color: var(--pink-light); box-shadow: -5px 0 0 var(--pink-light), 5px 0 0 var(--pink-light); }
+
+  /* 부스 배치도 */
+  .contract-section { margin-bottom: 18px; }
+  .contract-section:last-child { margin-bottom: 0; }
+  .contract-section-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .fp-wrap {
+    position: relative; width: 100%; border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; background: #f4f4f6; cursor: crosshair; touch-action: manipulation;
+  }
+  .fp-wrap img { display: block; width: 100%; height: auto; -webkit-user-drag: none; user-select: none; }
+  .fp-marker {
+    position: absolute; width: 26px; height: 26px; border-radius: 50%;
+    background: #ff3b6b; border: 3px solid #fff; box-shadow: 0 0 0 2px #ff3b6b, 0 2px 6px rgba(0,0,0,.4);
+    transform: translate(-50%, -50%); pointer-events: none;
+  }
+  .fp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .fp-actions button { width: auto; margin: 0; }
+  .fp-modal-overlay {
+    position: fixed; inset: 0; background: rgba(20,10,18,.92); z-index: 1000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px;
+  }
+  .fp-modal-overlay .fp-wrap { max-width: 720px; max-height: 80vh; }
+  .fp-modal-overlay .fp-wrap img { max-height: 80vh; object-fit: contain; width: 100%; }
+  .fp-modal-close { position: absolute; top: 16px; right: 16px; background: #fff; }
+  .vehicle-badge {
+    display: inline-block; background: var(--pink-light); color: #c0527a; font-weight: 700;
+    font-size: 12px; padding: 6px 10px; border-radius: 999px; margin-top: 8px;
+  }
 </style>
 </head>
 <body>
@@ -115,6 +143,7 @@
           <button class="secondary small" id="dt-edit-toggle">정보 수정</button>
         </div>
         <div class="hint" id="dt-meta">-</div>
+        <div id="dt-vehicle-summary" style="display:none"></div>
         <div class="bar-track"><div class="bar-fill" id="dt-bar"></div></div>
         <div class="hint" id="dt-progress-text">0/0 완료 (0%)</div>
 
@@ -149,7 +178,7 @@
 
       <div class="card">
         <div id="items-body"></div>
-        <div style="display:flex;gap:8px;margin-top:12px">
+        <div id="add-item-row" style="display:flex;gap:8px;margin-top:12px">
           <input type="text" id="new-item-text" placeholder="새 항목 입력" style="flex:1" />
           <button class="small" id="new-item-add" style="white-space:nowrap">추가</button>
         </div>
@@ -157,6 +186,13 @@
     </div>
 
     <div class="footer-note">박람회 체크리스트 · 누구나 사용 가능, 로그인 없음</div>
+  </div>
+
+  <!-- 부스 배치도 크게 보기 모달 -->
+  <div id="floorplan-modal" class="fp-modal-overlay" style="display:none">
+    <button class="secondary small fp-modal-close" id="fp-modal-close">닫기 ✕</button>
+    <div class="fp-wrap" id="fp-modal-wrap"></div>
+    <div class="hint" style="color:#fff;text-align:center;margin-top:10px">탭해서 우리 부스 위치를 표시하세요</div>
   </div>
 
 <script>
@@ -302,9 +338,14 @@
 
   function renderDetail() {
     const ev = currentEvent;
+    // '행사 계약'은 더 이상 체크리스트가 아니라서(예전 데이터만 남아있을 수 있음) 전체 진행률에서 제외.
     const progress = (() => {
       let total = 0, done = 0;
-      ev.categories.forEach((c) => { total += c.items.length; done += c.items.filter((it) => it.done).length; });
+      ev.categories.forEach((c) => {
+        if (c.id === "contract") return;
+        total += c.items.length;
+        done += c.items.filter((it) => it.done).length;
+      });
       return { total, done, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
     })();
     document.getElementById("dt-name").textContent = ev.name;
@@ -313,20 +354,43 @@
     document.getElementById("dt-bar").style.width = progress.percent + "%";
     document.getElementById("dt-progress-text").textContent = `${progress.done}/${progress.total} 완료 (${progress.percent}%)`;
 
+    const vSummary = document.getElementById("dt-vehicle-summary");
+    const va = ev.vehicleAccess;
+    if (va && va.date && va.endTime) {
+      const timeText = va.startTime ? `${va.startTime}~${va.endTime}` : `${va.endTime} 까지`;
+      vSummary.innerHTML = `<span class="vehicle-badge">🚚 차량 입차 — ${fmtDot(va.date)} ${timeText}</span>`;
+      vSummary.style.display = "block";
+    } else {
+      vSummary.style.display = "none";
+    }
+
     const tabsEl = document.getElementById("cat-tabs");
     tabsEl.innerHTML = "";
     ev.categories.forEach((c) => {
-      const catDone = c.items.filter((it) => it.done).length;
       const btn = document.createElement("button");
       btn.className = "tab" + (c.id === currentCatId ? " active" : "");
-      btn.textContent = `${c.name} (${catDone}/${c.items.length})`;
+      if (c.id === "contract") {
+        btn.textContent = c.name; // 체크리스트가 아니라서 (완료/전체) 카운트 안 보여줌
+      } else {
+        const catDone = c.items.filter((it) => it.done).length;
+        btn.textContent = `${c.name} (${catDone}/${c.items.length})`;
+      }
       btn.addEventListener("click", () => { currentCatId = c.id; renderDetail(); });
       tabsEl.appendChild(btn);
     });
 
     const cat = ev.categories.find((c) => c.id === currentCatId);
     const itemsBody = document.getElementById("items-body");
+    const addItemRow = document.getElementById("add-item-row");
     itemsBody.innerHTML = "";
+
+    if (cat.id === "contract") {
+      addItemRow.style.display = "none";
+      renderContractPanel(itemsBody, ev);
+      return;
+    }
+    addItemRow.style.display = "flex";
+
     cat.items.forEach((it, idx) => {
       const row = document.createElement("div");
       row.className = "item-row";
@@ -362,6 +426,230 @@
       itemsBody.appendChild(row);
     });
   }
+
+  // ===== 행사 계약 탭: 부스위치 / 배치도+마커 / 차량 입차시간 =====
+  function renderContractPanel(container, ev) {
+    // 1) 부스 번호 · 부스 위치
+    const sec1 = document.createElement("div");
+    sec1.className = "contract-section";
+    sec1.innerHTML = `
+      <div class="contract-section-title">① 부스 위치 및 부스 번호</div>
+      <div class="hint" style="margin-top:0">부스 번호: <b>${escapeHtml(ev.boothCount || "미입력 (상단 '정보 수정'에서 입력)")}</b></div>
+      <label>부스 위치 (예: 제1전시장 A홀, 출입구 오른쪽)</label>
+      <input type="text" id="cp-booth-location" value="${escapeHtml(ev.boothLocation || "")}" placeholder="예: 제1전시장 A홀, A-15 인근" />
+      <button class="small" id="cp-booth-location-save" style="margin-top:8px">저장</button>
+    `;
+    container.appendChild(sec1);
+    sec1.querySelector("#cp-booth-location-save").addEventListener("click", async () => {
+      const boothLocation = sec1.querySelector("#cp-booth-location").value.trim();
+      await fetch(`${API}/${currentSlug}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ boothLocation }),
+      });
+      await refreshDetail();
+    });
+
+    // 2) 부스 배치도
+    const sec2 = document.createElement("div");
+    sec2.className = "contract-section";
+    sec2.innerHTML = `<div class="contract-section-title">② 부스 배치도</div>`;
+    container.appendChild(sec2);
+    renderFloorPlanSection(sec2, ev);
+
+    // 3) 차량 입차 가능 시간
+    const va = ev.vehicleAccess || {};
+    const sec3 = document.createElement("div");
+    sec3.className = "contract-section";
+    sec3.innerHTML = `
+      <div class="contract-section-title">③ 차량 입차 가능 시간</div>
+      <label>차량 반입 날짜 *</label>
+      <input type="date" id="cp-va-date" value="${escapeHtml(va.date || "")}" />
+      <label>입차 가능 시작 시간 (선택)</label>
+      <input type="time" id="cp-va-start" value="${escapeHtml(va.startTime || "")}" />
+      <label>입차 마감 시간 *</label>
+      <input type="time" id="cp-va-end" value="${escapeHtml(va.endTime || "")}" />
+      <button class="small" id="cp-va-save" style="margin-top:8px">저장</button>
+      <div class="error" id="cp-va-error"></div>
+    `;
+    container.appendChild(sec3);
+    sec3.querySelector("#cp-va-save").addEventListener("click", async () => {
+      const date = sec3.querySelector("#cp-va-date").value;
+      const startTime = sec3.querySelector("#cp-va-start").value;
+      const endTime = sec3.querySelector("#cp-va-end").value;
+      const errEl = sec3.querySelector("#cp-va-error");
+      if (!date || !endTime) { errEl.textContent = "반입 날짜와 입차 마감 시간은 필수예요."; return; }
+      errEl.textContent = "";
+      const res = await fetch(`${API}/${currentSlug}/vehicle-access`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, startTime, endTime }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = "❌ " + (data.error || "저장 실패"); return; }
+      await refreshDetail();
+    });
+  }
+
+  function floorPlanImageSrc(fp) {
+    return (fp && (fp.imageDataUrl || fp.imageUrl)) || null;
+  }
+
+  // targetEl 안에 배치도 이미지+마커(또는 업로드 폼)를 그린다. big=true면 모달(크게보기)용.
+  function buildFloorPlanView(targetEl, ev, { big = false } = {}) {
+    targetEl.innerHTML = "";
+    const fp = ev.floorPlan;
+    const src = floorPlanImageSrc(fp);
+    if (!src) {
+      if (big) return; // 모달은 이미지 있을 때만 열림
+      targetEl.innerHTML = `
+        <div class="hint" style="margin-top:0">아직 배치도가 없어요. 공식 홈페이지 이미지 링크를 넣거나, 파일을 업로드해주세요.</div>
+        <label>이미지 링크(URL)</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="fp-url-input" placeholder="https://..." style="flex:1" />
+          <button class="small" id="fp-url-load" style="white-space:nowrap">불러오기</button>
+        </div>
+        <label>또는 파일 업로드</label>
+        <input type="file" id="fp-file-input" accept="image/*" />
+      `;
+      wireFloorPlanUploadControls(targetEl);
+      return;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "fp-wrap";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "부스 배치도";
+    img.addEventListener("error", () => {
+      wrap.innerHTML = "";
+      const msg = document.createElement("div");
+      msg.className = "hint";
+      msg.style.margin = "10px";
+      msg.textContent = "❌ 이미지를 불러올 수 없어요(링크가 만료됐거나 외부 표시가 막혀있을 수 있어요). 파일을 직접 업로드해주세요.";
+      wrap.appendChild(msg);
+    });
+    wrap.appendChild(img);
+
+    if (typeof fp.markerX === "number" && typeof fp.markerY === "number") {
+      const marker = document.createElement("div");
+      marker.className = "fp-marker";
+      marker.style.left = fp.markerX * 100 + "%";
+      marker.style.top = fp.markerY * 100 + "%";
+      wrap.appendChild(marker);
+    }
+
+    wrap.addEventListener("click", async (e) => {
+      const rect = img.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      if (x < 0 || x > 1 || y < 0 || y > 1) return;
+      await saveFloorPlan({ imageUrl: fp.imageUrl || null, imageDataUrl: fp.imageDataUrl || null, markerX: x, markerY: y });
+    });
+
+    targetEl.appendChild(wrap);
+
+    if (!big) {
+      const actions = document.createElement("div");
+      actions.className = "fp-actions";
+      const bigBtn = document.createElement("button");
+      bigBtn.className = "secondary";
+      bigBtn.textContent = "🔍 크게 보기";
+      bigBtn.addEventListener("click", () => openFloorPlanModal());
+      actions.appendChild(bigBtn);
+
+      if (typeof fp.markerX === "number") {
+        const clearMarkerBtn = document.createElement("button");
+        clearMarkerBtn.className = "secondary";
+        clearMarkerBtn.textContent = "마커 삭제";
+        clearMarkerBtn.addEventListener("click", async () => {
+          await saveFloorPlan({ imageUrl: fp.imageUrl || null, imageDataUrl: fp.imageDataUrl || null, markerX: null, markerY: null });
+        });
+        actions.appendChild(clearMarkerBtn);
+      }
+
+      const removeImgBtn = document.createElement("button");
+      removeImgBtn.className = "secondary";
+      removeImgBtn.textContent = "배치도 삭제";
+      removeImgBtn.addEventListener("click", async () => {
+        if (!confirm("배치도 이미지를 삭제할까요? (마커 위치도 같이 사라져요)")) return;
+        await fetch(`${API}/${currentSlug}/floor-plan`, { method: "DELETE" });
+        await refreshDetail();
+      });
+      actions.appendChild(removeImgBtn);
+      targetEl.appendChild(actions);
+    }
+  }
+
+  function wireFloorPlanUploadControls(targetEl) {
+    const urlInput = targetEl.querySelector("#fp-url-input");
+    const urlBtn = targetEl.querySelector("#fp-url-load");
+    const fileInput = targetEl.querySelector("#fp-file-input");
+
+    urlBtn.addEventListener("click", async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      await saveFloorPlan({ imageUrl: url, imageDataUrl: null, markerX: null, markerY: null });
+    });
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const dataUrl = await downscaleImageFile(file, 1600, 0.82);
+      await saveFloorPlan({ imageUrl: null, imageDataUrl: dataUrl, markerX: null, markerY: null });
+    });
+  }
+
+  function downscaleImageFile(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+            else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function saveFloorPlan(payload) {
+    const res = await fetch(`${API}/${currentSlug}/floor-plan`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      await refreshDetail();
+      const modal = document.getElementById("floorplan-modal");
+      if (modal.style.display !== "none") {
+        buildFloorPlanView(document.getElementById("fp-modal-wrap"), currentEvent, { big: true });
+      }
+    }
+  }
+
+  function renderFloorPlanSection(container, ev) {
+    const holder = document.createElement("div");
+    container.appendChild(holder);
+    buildFloorPlanView(holder, ev);
+  }
+
+  function openFloorPlanModal() {
+    const modal = document.getElementById("floorplan-modal");
+    const wrap = document.getElementById("fp-modal-wrap");
+    buildFloorPlanView(wrap, currentEvent, { big: true });
+    modal.style.display = "flex";
+  }
+
+  document.getElementById("fp-modal-close").addEventListener("click", () => {
+    document.getElementById("floorplan-modal").style.display = "none";
+  });
 
   async function toggleItem(catId, itemId, done) {
     await fetch(`${API}/${currentSlug}/categories/${catId}/items/${itemId}`, {
