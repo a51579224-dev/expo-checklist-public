@@ -8,74 +8,87 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
 <style>
   :root {
-    --pink: #ff8fc0;
-    --pink-light: #ffe6f2;
-    --text: #2c2638;
-    --muted: #8a8294;
-    --border: #ecd9e4;
+    --accent: #d9822b;
+    --accent-dark: #b8651a;
+    --accent-light: #faf0dd;
+    --text: #1c1a16;
+    --muted: #8a8075;
+    --border: #ead9bd;
+    --ivory: #fdf8ee;
   }
   * { box-sizing: border-box; }
+  input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; }
   body {
     font-family: -apple-system, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-    background: #fff8fb;
+    background: var(--ivory);
     color: var(--text);
     margin: 0;
     padding: 24px 16px 60px;
+    font-size: 16px;
   }
   .wrap { max-width: 640px; margin: 0 auto; }
-  header { text-align: center; margin-bottom: 20px; }
-  h1 { font-size: 22px; margin: 4px 0; }
-  .sub { color: var(--muted); font-size: 13px; }
+  header { text-align: center; margin-bottom: 22px; }
+  h1 { font-size: 28px; margin: 4px 0; font-weight: 800; letter-spacing: -.3px; }
+  .sub { color: var(--muted); font-size: 14px; }
   .card {
-    background: #fff; border: 1px solid var(--border); border-radius: 16px;
-    padding: 18px; margin-bottom: 16px;
+    background: #fff; border: 1px solid var(--border); border-radius: 18px;
+    padding: 20px; margin-bottom: 16px;
+    box-shadow: 0 2px 10px rgba(28,22,14,.05);
   }
-  label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 4px; }
+  label { display: block; font-size: 14px; font-weight: 700; margin: 14px 0 5px; }
   label:first-child { margin-top: 0; }
   input[type="text"], input[type="date"] {
-    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
-    font-size: 14px; font-family: inherit;
+    width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+    font-size: 16px; font-family: inherit; color: var(--text);
   }
   button {
-    background: var(--pink); color: #fff; border: none; border-radius: 10px;
-    padding: 11px 16px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%;
-    margin-top: 14px;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 13px 16px; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%;
+    margin-top: 14px; transition: background .15s, transform .1s;
   }
+  button:active { transform: scale(.98); }
   button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); margin-top: 8px; }
-  button.small { width: auto; font-size: 12px; padding: 6px 12px; margin: 0; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-  .error { color: #d6336c; font-size: 13px; margin-top: 8px; }
-  .bar-track { background: var(--border); border-radius: 999px; height: 10px; overflow: hidden; margin-top: 10px; }
-  .bar-fill { background: var(--pink); height: 100%; width: 0%; transition: width .2s; }
+  button.small { width: auto; font-size: 13px; padding: 8px 14px; margin: 0; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .error { color: #c23b2e; font-size: 14px; margin-top: 8px; }
+  .bar-track { background: var(--border); border-radius: 999px; height: 12px; overflow: hidden; margin-top: 10px; }
+  .bar-fill { background: var(--accent); height: 100%; width: 0%; transition: width .2s; }
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
   .tab {
     background: #fff; color: var(--text); border: 1px solid var(--border); border-radius: 10px;
-    padding: 8px 12px; font-size: 13px; cursor: pointer;
+    padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s;
   }
-  .tab.active { background: var(--pink); color: #fff; border-color: var(--pink); }
-  .item-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+  .item-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .item-row input[type="checkbox"] { width: auto; margin: 0; flex-shrink: 0; }
-  .item-row .txt { flex: 1; cursor: text; font-size: 14px; }
+  .item-row .txt { flex: 1; cursor: text; font-size: 16px; }
   .item-row .txt.done { text-decoration: line-through; color: var(--muted); }
-  .item-row button { width: 30px; height: 30px; padding: 0; font-size: 11px; flex-shrink: 0; margin: 0; }
+  .item-row button { width: 32px; height: 32px; padding: 0; font-size: 12px; flex-shrink: 0; margin: 0; }
   .item-row button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; }
   .link-box {
-    display: flex; gap: 8px; align-items: center; background: var(--pink-light);
-    border-radius: 10px; padding: 10px 12px; font-size: 13px; word-break: break-all;
+    display: flex; gap: 8px; align-items: center; background: var(--accent-light);
+    border-radius: 10px; padding: 10px 12px; font-size: 14px; word-break: break-all;
   }
   .link-box code { flex: 1; }
-  .copied { color: #2b8a3e; font-size: 12px; margin-top: 4px; }
+  .copied { color: #2b8a3e; font-size: 13px; margin-top: 4px; }
   .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
-  .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background: var(--pink); border-color: var(--pink); }
-  .flatpickr-day.inRange { background: var(--pink-light); border-color: var(--pink-light); box-shadow: -5px 0 0 var(--pink-light), 5px 0 0 var(--pink-light); }
+
+  /* 탭 전환: 옆에서 밀려 들어오는 느낌(push) */
+  .push-anim { animation: pushIn .22s ease; }
+  @keyframes pushIn {
+    from { opacity: 0; transform: translateX(18px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background: var(--accent); border-color: var(--accent); }
+  .flatpickr-day.inRange { background: var(--accent-light); border-color: var(--accent-light); box-shadow: -5px 0 0 var(--accent-light), 5px 0 0 var(--accent-light); }
 
   /* 부스 배치도 */
   .contract-section { margin-bottom: 18px; }
   .contract-section:last-child { margin-bottom: 0; }
-  .contract-section-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .contract-section-title { font-weight: 800; font-size: 16px; margin-bottom: 8px; }
   .fp-wrap {
     position: relative; width: 100%; border: 1px solid var(--border); border-radius: 12px;
-    overflow: hidden; background: #f4f4f6; cursor: crosshair; touch-action: manipulation;
+    overflow: hidden; background: #f1ece0; cursor: crosshair; touch-action: manipulation;
   }
   .fp-wrap img { display: block; width: 100%; height: auto; -webkit-user-drag: none; user-select: none; }
   .fp-marker {
@@ -86,97 +99,97 @@
   .fp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .fp-actions button { width: auto; margin: 0; }
   .fp-modal-overlay {
-    position: fixed; inset: 0; background: rgba(20,10,18,.92); z-index: 1000;
+    position: fixed; inset: 0; background: rgba(28,22,14,.92); z-index: 1000;
     display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px;
   }
   .fp-modal-overlay .fp-wrap { max-width: 720px; max-height: 80vh; }
   .fp-modal-overlay .fp-wrap img { max-height: 80vh; object-fit: contain; width: 100%; }
   .fp-modal-close { position: absolute; top: 16px; right: 16px; background: #fff; }
   .vehicle-badge {
-    display: inline-block; background: var(--pink-light); color: #c0527a; font-weight: 700;
-    font-size: 12px; padding: 6px 10px; border-radius: 999px; margin-top: 8px;
+    display: inline-block; background: var(--accent-light); color: var(--accent-dark); font-weight: 700;
+    font-size: 13px; padding: 7px 12px; border-radius: 999px; margin-top: 8px;
   }
 
-  /* 상품 재고: 요약 카드 + 품목 카드 */
+  /* 상품 재고: 요약 카드(대시보드 스타일 — 숫자가 한눈에 들어오게) + 품목 카드 */
   .inv-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
-  .inv-stat { background: var(--pink-light); border-radius: 10px; padding: 10px 6px; text-align: center; }
-  .inv-stat .num { font-size: 18px; font-weight: 800; color: #c0527a; display: block; }
-  .inv-stat .lbl { font-size: 11px; color: var(--muted); }
+  .inv-stat { background: var(--accent-light); border-radius: 12px; padding: 14px 6px; text-align: center; }
+  .inv-stat .num { font-size: 28px; font-weight: 900; color: var(--accent-dark); display: block; line-height: 1.15; }
+  .inv-stat .lbl { font-size: 12px; color: var(--muted); font-weight: 600; }
   .inv-filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  .inv-filters button { width: auto; margin: 0; font-size: 12px; padding: 7px 12px; }
-  .inv-filters button.secondary.active { background: var(--pink); color: #fff; border-color: var(--pink); }
+  .inv-filters button { width: auto; margin: 0; font-size: 13px; padding: 8px 14px; }
+  .inv-filters button.secondary.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .inv-add-row { display: flex; gap: 8px; margin-bottom: 16px; }
   .inv-add-row input { flex: 1; }
   .inv-add-row button { width: auto; white-space: nowrap; margin: 0; }
-  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
   .inv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .inv-card-head .txt { flex: 1; font-size: 14px; font-weight: 700; cursor: text; }
+  .inv-card-head .txt { flex: 1; font-size: 16px; font-weight: 700; cursor: text; }
   .inv-card-head .txt.done { text-decoration: line-through; color: var(--muted); }
-  .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 30px; margin: 0; flex-shrink: 0; }
+  .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 32px; margin: 0; flex-shrink: 0; }
   .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-  .inv-qty-row .qlbl { font-size: 12px; color: var(--muted); flex-shrink: 0; width: 44px; }
+  .inv-qty-row .qlbl { font-size: 13px; color: var(--muted); flex-shrink: 0; width: 44px; }
   .inv-qty-row input[type="number"] {
-    width: 58px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit;
+    width: 68px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text);
   }
-  .inv-qty-row .unit { font-size: 12px; color: var(--muted); }
-  .inv-total-pc { font-size: 12px; color: #c0527a; margin-left: 4px; }
-  .inv-diff { font-size: 12px; color: #d6336c; margin-left: 6px; }
+  .inv-qty-row .unit { font-size: 13px; color: var(--muted); }
+  .inv-total-pc { font-size: 13px; color: var(--accent-dark); margin-left: 4px; font-weight: 700; }
+  .inv-diff { font-size: 13px; color: #c23b2e; margin-left: 6px; font-weight: 700; }
   .inv-checks { display: flex; gap: 14px; margin: 8px 0; }
-  .inv-checks label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; margin: 0; cursor: pointer; }
+  .inv-checks label { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; margin: 0; cursor: pointer; }
   .inv-checks input[type="checkbox"] { width: auto; margin: 0; }
-  .inv-note { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; }
-  .inv-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+  .inv-note { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
+  .inv-empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
 
   /* 집기: 분류(그룹)별로 묶어서 보기 */
-  .sup-section-title { font-weight: 800; font-size: 15px; margin: 18px 0 10px; }
+  .sup-section-title { font-weight: 800; font-size: 17px; margin: 18px 0 10px; }
   .sup-section-title:first-child { margin-top: 0; }
-  .sup-group { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .sup-group { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
   .sup-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .sup-group-head .name { font-weight: 700; font-size: 14px; }
-  .sup-group-head .count { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
-  .sup-group-head button.del-group { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 28px; margin: 0; font-size: 12px; }
-  .sup-item-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .sup-group-head .name { font-weight: 800; font-size: 16px; }
+  .sup-group-head .count { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .sup-group-head button.del-group { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 30px; margin: 0; font-size: 13px; }
+  .sup-item-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .sup-item-row:last-of-type { border-bottom: none; }
   .sup-item-row input[type="checkbox"] { width: auto; margin: 0; flex-shrink: 0; }
-  .sup-item-row .txt { flex: 1; cursor: text; font-size: 14px; min-width: 90px; }
+  .sup-item-row .txt { flex: 1; cursor: text; font-size: 16px; min-width: 90px; }
   .sup-item-row .txt.done { text-decoration: line-through; color: var(--muted); }
   .sup-item-row input[type="number"] {
-    width: 56px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; flex-shrink: 0;
+    width: 64px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text); flex-shrink: 0;
   }
-  .sup-item-row .unit { font-size: 12px; color: var(--muted); flex-shrink: 0; }
-  .sup-item-row button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 28px; margin: 0; flex-shrink: 0; font-size: 12px; }
+  .sup-item-row .unit { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+  .sup-item-row button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 30px; margin: 0; flex-shrink: 0; font-size: 13px; }
   .sup-add-row { display: flex; gap: 8px; margin-top: 8px; }
-  .sup-add-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
-  .sup-add-row button { width: auto; margin: 0; font-size: 12px; padding: 7px 12px; white-space: nowrap; }
+  .sup-add-row input { flex: 1; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; }
+  .sup-add-row button { width: auto; margin: 0; font-size: 13px; padding: 8px 14px; white-space: nowrap; }
   .sup-new-group { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; }
   .sup-new-group .sup-add-row input { min-width: 0; }
 
   /* 철수 정산 */
   .settle-section { margin-bottom: 22px; }
   .settle-section:last-child { margin-bottom: 0; }
-  .settle-section-title { font-weight: 800; font-size: 15px; margin-bottom: 10px; }
-  .settle-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .settle-section-title { font-weight: 800; font-size: 17px; margin-bottom: 10px; }
+  .settle-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .settle-row:last-of-type { border-bottom: none; }
-  .settle-row .name { flex: 1; font-size: 14px; min-width: 100px; }
-  .settle-row .taken { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .settle-row .name { flex: 1; font-size: 16px; min-width: 100px; }
+  .settle-row .taken { font-size: 13px; color: var(--muted); flex-shrink: 0; }
   .settle-row input[type="number"] {
-    width: 56px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; flex-shrink: 0;
+    width: 64px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text); flex-shrink: 0;
   }
-  .settle-row .unit { font-size: 12px; color: var(--muted); flex-shrink: 0; }
-  .settle-row .sold-est { font-size: 12px; color: #c0527a; flex-basis: 100%; }
+  .settle-row .unit { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+  .settle-row .sold-est { font-size: 13px; color: var(--accent-dark); flex-basis: 100%; font-weight: 700; }
   .settle-revenue-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-  .settle-revenue-grid label { font-size: 12px; margin: 0 0 4px; }
-  .settle-revenue-grid input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; }
-  .settle-revenue-total { background: var(--pink-light); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #c0527a; text-align: center; }
+  .settle-revenue-grid label { font-size: 13px; margin: 0 0 4px; }
+  .settle-revenue-grid input { width: 100%; padding: 10px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 17px; font-weight: 700; font-family: inherit; color: var(--text); }
+  .settle-revenue-total { background: var(--accent-light); border-radius: 10px; padding: 12px; font-size: 18px; font-weight: 900; color: var(--accent-dark); text-align: center; }
   .settle-pos-upload { border: 1px dashed var(--border); border-radius: 12px; padding: 14px; }
-  .settle-beta-hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; background: var(--pink-light); border-radius: 8px; padding: 8px 10px; }
-  .settle-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
-  .settle-table th, .settle-table td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); }
-  .settle-table th { color: var(--muted); font-weight: 700; font-size: 12px; }
-  .settle-table td.num { text-align: right; }
-  .settle-uncertain { margin-top: 10px; font-size: 12px; color: #d6336c; }
-  .settle-uncertain pre { background: #fff5f7; border-radius: 8px; padding: 8px; margin-top: 6px; white-space: pre-wrap; word-break: break-all; font-size: 11px; color: var(--text); }
-  textarea.settle-notes { width: 100%; min-height: 90px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; resize: vertical; }
+  .settle-beta-hint { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; background: var(--accent-light); border-radius: 8px; padding: 9px 10px; }
+  .settle-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+  .settle-table th, .settle-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  .settle-table th { color: var(--muted); font-weight: 700; font-size: 13px; }
+  .settle-table td.num { text-align: right; font-weight: 700; }
+  .settle-uncertain { margin-top: 10px; font-size: 13px; color: #c23b2e; }
+  .settle-uncertain pre { background: #fbeee4; border-radius: 8px; padding: 8px; margin-top: 6px; white-space: pre-wrap; word-break: break-all; font-size: 12px; color: var(--text); }
+  textarea.settle-notes { width: 100%; min-height: 90px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 16px; font-family: inherit; resize: vertical; }
 </style>
 </head>
 <body>
@@ -281,6 +294,7 @@
   let currentSlug = null;
   let currentEvent = null;
   let currentCatId = "contract";
+  let lastAnimatedCatId = null;
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
@@ -469,6 +483,15 @@
     const itemsBody = document.getElementById("items-body");
     const addItemRow = document.getElementById("add-item-row");
     itemsBody.innerHTML = "";
+
+    // 탭을 바꿨을 때만(= 같은 탭 안에서 데이터만 저장돼서 다시 그릴 때는 X) 화면이 옆에서 밀려 들어오는 효과
+    if (cat.id !== lastAnimatedCatId) {
+      lastAnimatedCatId = cat.id;
+      const itemsCard = itemsBody.closest(".card") || itemsBody;
+      itemsCard.classList.remove("push-anim");
+      void itemsCard.offsetWidth; // 강제 리플로우로 애니메이션 재시작
+      itemsCard.classList.add("push-anim");
+    }
 
     if (cat.id === "contract") {
       addItemRow.style.display = "none";

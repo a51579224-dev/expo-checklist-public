@@ -29,7 +29,7 @@ const PORT = process.env.PORT || 4100;
 // 2026-11-11: '현장 운영'은 더 이상 쓰지 않아 새 행사엔 안 만듦(탭 자체를 없앰).
 // 예전 행사에 이미 저장된 데이터는 지우지 않고 그대로 두되, 화면에서는 완전히 숨김(복구는 DB에서만 가능).
 const CHECKLIST_CATEGORIES = [
-  { id: "contract", name: "행사 계약" },
+  { id: "contract", name: "행사 정보" },
   { id: "inventory", name: "상품 재고" },
   { id: "supplies", name: "집기" },
   { id: "settlement", name: "철수 정산" },
