@@ -6,6 +6,7 @@ import pg from "pg";
 import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parsePosExcel } from "./posParser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,11 +26,12 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 4100;
 
+// 2026-11-11: '현장 운영'은 더 이상 쓰지 않아 새 행사엔 안 만듦(탭 자체를 없앰).
+// 예전 행사에 이미 저장된 데이터는 지우지 않고 그대로 두되, 화면에서는 완전히 숨김(복구는 DB에서만 가능).
 const CHECKLIST_CATEGORIES = [
   { id: "contract", name: "행사 계약" },
   { id: "inventory", name: "상품 재고" },
   { id: "supplies", name: "집기" },
-  { id: "operation", name: "현장 운영" },
   { id: "settlement", name: "철수 정산" },
 ];
 
@@ -57,22 +59,8 @@ const DEFAULT_TEMPLATE_ITEMS = {
     { group: "작업 도구", text: "볼펜" },
     { group: "전기용품", text: "멀티탭" },
   ],
-  operation: [
-    "부스 설치 및 상품 진열",
-    "가격표·안내물 설치",
-    "결제 단말기 및 인터넷 테스트",
-    "행사 시작 전 상품 수량 확인",
-    "판매 중 상품 보충 및 재고 체크",
-    "일일 매출·현금·결제 내역 확인",
-  ],
-  settlement: [
-    "남은 상품 수량 확인",
-    "집기 및 비품 회수·포장",
-    "철수 후 차량 적재 확인",
-    "반입 상품·판매 상품·반품 수량 정산",
-    "최종 매출 및 행사 비용 정리",
-    "다음 행사 개선 사항 기록",
-  ],
+  // 2026-11-11: '철수 정산'도 체크리스트 대신 남은재고/일별매출/판매내역업로드/개선사항 전용 화면으로 바뀜.
+  settlement: [],
 };
 
 function newId(prefix) {
@@ -114,10 +102,16 @@ function cloneCategories(categories) {
       ...(it.boxQty !== undefined ? { boxQty: it.boxQty } : {}),
       ...(it.ctnActual !== undefined ? { ctnActual: null } : {}),
       ...(it.pcActual !== undefined ? { pcActual: null } : {}),
+      ...(it.ctnRemaining !== undefined ? { ctnRemaining: null } : {}),
+      ...(it.pcRemaining !== undefined ? { pcRemaining: null } : {}),
       ...(it.note !== undefined ? { note: "" } : {}),
     })),
   }));
 }
+
+// 체크박스 기반 진행률 계산에서 제외하는 카테고리: 더 이상 체크리스트가 아니거나(계약/정산),
+// 탭 자체가 없어진(현장운영, 예전 데이터만 남아있을 수 있음) 경우.
+const NON_CHECKLIST_CATEGORY_IDS = new Set(["contract", "operation", "settlement"]);
 
 function computeProgress(categories) {
   let total = 0;
@@ -125,8 +119,7 @@ function computeProgress(categories) {
   const byCategory = categories.map((c) => {
     const catTotal = c.items.length;
     const catDone = c.items.filter((it) => it.done).length;
-    // '행사 계약'은 더 이상 체크리스트가 아니라서(예전 데이터만 남아있을 수 있음) 전체 진행률 계산엔 안 넣음.
-    if (c.id !== "contract") {
+    if (!NON_CHECKLIST_CATEGORY_IDS.has(c.id)) {
       total += catTotal;
       done += catDone;
     }
@@ -146,6 +139,7 @@ function rowToEvent(row) {
     boothLocation: row.booth_location || "",
     floorPlan: row.floor_plan || null,
     vehicleAccess: row.vehicle_access || null,
+    settlement: row.settlement || null,
     categories: row.categories,
     createdAt: row.created_at,
   };
@@ -278,6 +272,56 @@ app.put("/api/events/:slug/vehicle-access", async (req, res) => {
   }
 });
 
+// 철수 정산 — 일별 매출 / 다음 행사 개선사항 (있는 필드만 반영)
+app.put("/api/events/:slug/settlement", async (req, res) => {
+  const { revenueFri, revenueSat, revenueSun, improvementNotes } = req.body ?? {};
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const settlement = row.settlement || {};
+    settlement.revenue = settlement.revenue || {};
+    if (revenueFri !== undefined) settlement.revenue.fri = normalizeQty(revenueFri);
+    if (revenueSat !== undefined) settlement.revenue.sat = normalizeQty(revenueSat);
+    if (revenueSun !== undefined) settlement.revenue.sun = normalizeQty(revenueSun);
+    if (improvementNotes !== undefined) settlement.improvementNotes = String(improvementNotes).trim();
+    const { rows } = await pool.query(
+      "update events set settlement = $2::jsonb, updated_at = now() where slug = $1 returning *",
+      [req.params.slug, JSON.stringify(settlement)]
+    );
+    res.json({ event: rowToEvent(rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// 철수 정산 — 토스 단말기 판매내역 엑셀 업로드(베타). base64로 받아서 서버에서 파싱만 하고 저장.
+app.post("/api/events/:slug/settlement/pos-upload", async (req, res) => {
+  const { fileName, fileDataBase64 } = req.body ?? {};
+  if (!fileDataBase64) return res.status(400).json({ error: "엑셀 파일 데이터가 없어요." });
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const buffer = Buffer.from(fileDataBase64, "base64");
+    const parsed = await parsePosExcel(buffer);
+    const settlement = row.settlement || {};
+    settlement.pos = {
+      fileName: fileName || "",
+      uploadedAt: new Date().toISOString(),
+      recognized: parsed.recognized,
+      summary: parsed.summary,
+      uncertain: parsed.uncertain,
+      message: parsed.message,
+    };
+    const { rows } = await pool.query(
+      "update events set settlement = $2::jsonb, updated_at = now() where slug = $1 returning *",
+      [req.params.slug, JSON.stringify(settlement)]
+    );
+    res.json({ event: rowToEvent(rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: "엑셀 파일을 읽는 중 문제가 생겼어요: " + String(err.message || err) });
+  }
+});
+
 // 다른 행사로 복제 — 완료상태 초기화, 새 링크(slug) 발급. 추가했던 항목·순서는 그대로 복제.
 app.post("/api/events/:slug/duplicate", async (req, res) => {
   const { newName, startDate, endDate, location, boothCount } = req.body ?? {};
@@ -341,7 +385,10 @@ function normalizeQty(v) {
 
 // 항목 수정 — 이름 변경, 완료/적재 체크 토글, '상품 재고'/'집기' 전용 수량·분류·메모 필드(있을 때만 반영)
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
-  const { text, done, loaded, group, qty, ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, note } = req.body ?? {};
+  const {
+    text, done, loaded, group, qty,
+    ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, note,
+  } = req.body ?? {};
   try {
     const row = await getEventRow(req.params.slug);
     if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
@@ -362,6 +409,8 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
     if (boxQty !== undefined) item.boxQty = normalizeQty(boxQty);
     if (ctnActual !== undefined) item.ctnActual = normalizeQty(ctnActual);
     if (pcActual !== undefined) item.pcActual = normalizeQty(pcActual);
+    if (ctnRemaining !== undefined) item.ctnRemaining = normalizeQty(ctnRemaining);
+    if (pcRemaining !== undefined) item.pcRemaining = normalizeQty(pcRemaining);
     if (note !== undefined) item.note = String(note).trim();
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
     res.json({ item, progress: computeProgress(ev.categories) });

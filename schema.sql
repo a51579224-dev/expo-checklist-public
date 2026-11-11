@@ -21,3 +21,7 @@ alter table events
   add column if not exists booth_location text default '',
   add column if not exists floor_plan jsonb default null,
   add column if not exists vehicle_access jsonb default null;
+
+-- 2026-11-11: '철수 정산' 탭 개편 — 일별 매출/판매내역(엑셀 업로드)/개선사항
+alter table events
+  add column if not exists settlement jsonb default null;

@@ -150,6 +150,33 @@
   .sup-add-row button { width: auto; margin: 0; font-size: 12px; padding: 7px 12px; white-space: nowrap; }
   .sup-new-group { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; }
   .sup-new-group .sup-add-row input { min-width: 0; }
+
+  /* 철수 정산 */
+  .settle-section { margin-bottom: 22px; }
+  .settle-section:last-child { margin-bottom: 0; }
+  .settle-section-title { font-weight: 800; font-size: 15px; margin-bottom: 10px; }
+  .settle-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .settle-row:last-of-type { border-bottom: none; }
+  .settle-row .name { flex: 1; font-size: 14px; min-width: 100px; }
+  .settle-row .taken { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .settle-row input[type="number"] {
+    width: 56px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; flex-shrink: 0;
+  }
+  .settle-row .unit { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .settle-row .sold-est { font-size: 12px; color: #c0527a; flex-basis: 100%; }
+  .settle-revenue-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .settle-revenue-grid label { font-size: 12px; margin: 0 0 4px; }
+  .settle-revenue-grid input { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; }
+  .settle-revenue-total { background: var(--pink-light); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #c0527a; text-align: center; }
+  .settle-pos-upload { border: 1px dashed var(--border); border-radius: 12px; padding: 14px; }
+  .settle-beta-hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; background: var(--pink-light); border-radius: 8px; padding: 8px 10px; }
+  .settle-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  .settle-table th, .settle-table td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); }
+  .settle-table th { color: var(--muted); font-weight: 700; font-size: 12px; }
+  .settle-table td.num { text-align: right; }
+  .settle-uncertain { margin-top: 10px; font-size: 12px; color: #d6336c; }
+  .settle-uncertain pre { background: #fff5f7; border-radius: 8px; padding: 8px; margin-top: 6px; white-space: pre-wrap; word-break: break-all; font-size: 11px; color: var(--text); }
+  textarea.settle-notes { width: 100%; min-height: 90px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; resize: vertical; }
 </style>
 </head>
 <body>
@@ -391,13 +418,16 @@
     }
   }
 
+  // '행사 계약'/'철수 정산'은 더 이상 체크리스트가 아니고, '현장 운영'은 탭 자체가 없어짐
+  // (예전 데이터만 남아있을 수 있음) — 전체 진행률 계산과 탭 목록 모두에서 제외.
+  const NON_CHECKLIST_CATEGORY_IDS = new Set(["contract", "operation", "settlement"]);
+
   function renderDetail() {
     const ev = currentEvent;
-    // '행사 계약'은 더 이상 체크리스트가 아니라서(예전 데이터만 남아있을 수 있음) 전체 진행률에서 제외.
     const progress = (() => {
       let total = 0, done = 0;
       ev.categories.forEach((c) => {
-        if (c.id === "contract") return;
+        if (NON_CHECKLIST_CATEGORY_IDS.has(c.id)) return;
         total += c.items.length;
         done += c.items.filter((it) => it.done).length;
       });
@@ -422,9 +452,10 @@
     const tabsEl = document.getElementById("cat-tabs");
     tabsEl.innerHTML = "";
     ev.categories.forEach((c) => {
+      if (c.id === "operation") return; // 탭 자체를 없앰 — 예전 데이터만 숨겨서 보존
       const btn = document.createElement("button");
       btn.className = "tab" + (c.id === currentCatId ? " active" : "");
-      if (c.id === "contract") {
+      if (c.id === "contract" || c.id === "settlement") {
         btn.textContent = c.name; // 체크리스트가 아니라서 (완료/전체) 카운트 안 보여줌
       } else {
         const catDone = c.items.filter((it) => it.done).length;
@@ -452,6 +483,11 @@
     if (cat.id === "supplies") {
       addItemRow.style.display = "none";
       renderSuppliesPanel(itemsBody, cat);
+      return;
+    }
+    if (cat.id === "settlement") {
+      addItemRow.style.display = "none";
+      renderSettlementPanel(itemsBody, ev);
       return;
     }
     addItemRow.style.display = "flex";
@@ -828,6 +864,238 @@
     itemRow.append(itemNameInput, addGroupBtn);
     newGroupBox.append(groupNameInput, itemRow);
     container.appendChild(newGroupBox);
+  }
+
+  // ===== 철수 정산 탭: 남은 재고 / 일별 매출 / 판매내역 업로드(베타) / 개선사항 =====
+  function renderSettlementPanel(container, ev) {
+    renderRemainingStockSection(container, ev);
+    renderDailyRevenueSection(container, ev);
+    renderPosUploadSection(container, ev);
+    renderImprovementNotesSection(container, ev);
+  }
+
+  function renderRemainingStockSection(container, ev) {
+    const sec = document.createElement("div");
+    sec.className = "settle-section";
+    sec.innerHTML = `<div class="settle-section-title">① 남은 재고</div>`;
+    const invCat = ev.categories.find((c) => c.id === "inventory");
+    const items = invCat ? invCat.items : [];
+
+    if (items.length === 0) {
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.style.margin = "0";
+      hint.textContent = "'상품 재고' 탭에 등록된 품목이 없어요. 먼저 그쪽에서 가져갈 상품을 등록해주세요.";
+      sec.appendChild(hint);
+      container.appendChild(sec);
+      return;
+    }
+
+    items.forEach((it) => {
+      const row = document.createElement("div");
+      row.className = "settle-row";
+
+      const takenCtn = it.ctnActual ?? it.ctnPlanned ?? null;
+      const takenPc = it.pcActual ?? it.pcPlanned ?? null;
+      const takenText = (takenCtn !== null || takenPc !== null)
+        ? `가져간 수량: ${takenCtn ?? 0} CTN / ${takenPc ?? 0} PC`
+        : "가져간 수량: 미입력";
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "name";
+      nameEl.textContent = it.text;
+
+      const takenEl = document.createElement("span");
+      takenEl.className = "taken";
+      takenEl.textContent = takenText;
+
+      const ctnInput = numInput(it.ctnRemaining, "CTN");
+      const pcInput = numInput(it.pcRemaining, "PC");
+
+      const save = async () => {
+        await fetch(`${API}/${currentSlug}/categories/inventory/items/${it.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ctnRemaining: ctnInput.value, pcRemaining: pcInput.value }),
+        });
+        await refreshDetail();
+      };
+      ctnInput.addEventListener("change", save);
+      pcInput.addEventListener("change", save);
+
+      row.append(nameEl, takenEl, ctnInput, span("unit", "CTN"), pcInput, span("unit", "PC"));
+
+      const hasRemaining = it.ctnRemaining !== null && it.ctnRemaining !== undefined
+        || it.pcRemaining !== null && it.pcRemaining !== undefined;
+      if (hasRemaining && (takenCtn !== null || takenPc !== null)) {
+        const soldCtn = (takenCtn || 0) - (it.ctnRemaining || 0);
+        const soldPc = (takenPc || 0) - (it.pcRemaining || 0);
+        row.appendChild(span("sold-est", `→ 판매 추정: CTN ${soldCtn} / PC ${soldPc}`));
+      }
+      sec.appendChild(row);
+    });
+
+    container.appendChild(sec);
+  }
+
+  function renderDailyRevenueSection(container, ev) {
+    const sec = document.createElement("div");
+    sec.className = "settle-section";
+    const title = document.createElement("div");
+    title.className = "settle-section-title";
+    title.textContent = "② 일별 매출";
+    sec.appendChild(title);
+
+    const revenue = (ev.settlement && ev.settlement.revenue) || {};
+    const grid = document.createElement("div");
+    grid.className = "settle-revenue-grid";
+
+    const mk = (key, label) => {
+      const wrap = document.createElement("div");
+      const lbl = document.createElement("label");
+      lbl.textContent = label;
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.placeholder = "원";
+      if (revenue[key] !== null && revenue[key] !== undefined) input.value = revenue[key];
+      wrap.append(lbl, input);
+      return { wrap, input };
+    };
+    const fri = mk("fri", "금요일");
+    const sat = mk("sat", "토요일");
+    const sun = mk("sun", "일요일");
+    grid.append(fri.wrap, sat.wrap, sun.wrap);
+    sec.appendChild(grid);
+
+    const total = document.createElement("div");
+    total.className = "settle-revenue-total";
+    const sumFn = () => {
+      const n = (v) => (v === "" ? 0 : Number(v) || 0);
+      return n(fri.input.value) + n(sat.input.value) + n(sun.input.value);
+    };
+    total.textContent = `3일 합계: ${sumFn().toLocaleString()}원`;
+    sec.appendChild(total);
+
+    const save = async (key, input) => {
+      await fetch(`${API}/${currentSlug}/settlement`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: input.value }),
+      });
+      total.textContent = `3일 합계: ${sumFn().toLocaleString()}원`;
+    };
+    fri.input.addEventListener("change", () => save("revenueFri", fri.input));
+    sat.input.addEventListener("change", () => save("revenueSat", sat.input));
+    sun.input.addEventListener("change", () => save("revenueSun", sun.input));
+
+    container.appendChild(sec);
+  }
+
+  function renderPosUploadSection(container, ev) {
+    const sec = document.createElement("div");
+    sec.className = "settle-section";
+    const title = document.createElement("div");
+    title.className = "settle-section-title";
+    title.textContent = "③ 품목별 판매 내역";
+    sec.appendChild(title);
+
+    const box = document.createElement("div");
+    box.className = "settle-pos-upload";
+    box.innerHTML = `<div class="settle-beta-hint">베타 기능입니다. 엑셀 파일 형식에 따라 일부 항목을 불러오지 못할 수 있으니, 정리 결과를 원본과 확인해주세요.</div>`;
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".xlsx,.xls";
+    const uploadBtn = document.createElement("button");
+    uploadBtn.className = "small";
+    uploadBtn.style.marginLeft = "8px";
+    uploadBtn.textContent = "판매내역 올리기";
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) { alert("엑셀 파일을 먼저 선택해주세요."); return; }
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = "읽는 중...";
+      try {
+        const base64 = await fileToBase64(file);
+        const res = await fetch(`${API}/${currentSlug}/settlement/pos-upload`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: file.name, fileDataBase64: base64 }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          alert(body.error || "업로드에 실패했어요.");
+        }
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = "판매내역 올리기";
+        await refreshDetail();
+      }
+    });
+    box.append(fileInput, uploadBtn);
+
+    const pos = ev.settlement && ev.settlement.pos;
+    if (pos) {
+      const meta = document.createElement("div");
+      meta.className = "hint";
+      meta.style.marginTop = "10px";
+      meta.textContent = `마지막 업로드: ${escapeHtml(pos.fileName || "")} (${new Date(pos.uploadedAt).toLocaleString("ko-KR")})`;
+      box.appendChild(meta);
+
+      if (!pos.recognized) {
+        const warn = document.createElement("div");
+        warn.className = "settle-uncertain";
+        warn.textContent = pos.message || "표 형식을 인식하지 못했어요.";
+        box.appendChild(warn);
+      } else if (pos.summary && pos.summary.length > 0) {
+        const table = document.createElement("table");
+        table.className = "settle-table";
+        table.innerHTML = `
+          <thead><tr><th>품목</th><th style="text-align:right">수량</th><th style="text-align:right">금액</th></tr></thead>
+          <tbody>${pos.summary.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td class="num">${r.qty.toLocaleString()}</td><td class="num">${r.amount.toLocaleString()}원</td></tr>`).join("")}</tbody>
+        `;
+        box.appendChild(table);
+      }
+
+      if (pos.uncertain && pos.uncertain.length > 0) {
+        const warn = document.createElement("div");
+        warn.className = "settle-uncertain";
+        warn.innerHTML = `⚠️ ${escapeHtml(pos.message || "일부 행을 자동으로 읽지 못했어요.")} 원본에서 직접 확인해주세요.<pre>${escapeHtml(JSON.stringify(pos.uncertain.slice(0, 15), null, 1))}</pre>`;
+        box.appendChild(warn);
+      }
+    }
+
+    sec.appendChild(box);
+    container.appendChild(sec);
+  }
+
+  function renderImprovementNotesSection(container, ev) {
+    const sec = document.createElement("div");
+    sec.className = "settle-section";
+    const title = document.createElement("div");
+    title.className = "settle-section-title";
+    title.textContent = "④ 다음 행사 개선사항";
+    sec.appendChild(title);
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "settle-notes";
+    textarea.placeholder = "다음엔 이렇게 바꿔보자 — 자유롭게 적어주세요.";
+    textarea.value = (ev.settlement && ev.settlement.improvementNotes) || "";
+    textarea.addEventListener("blur", async () => {
+      await fetch(`${API}/${currentSlug}/settlement`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ improvementNotes: textarea.value }),
+      });
+    });
+    sec.appendChild(textarea);
+    container.appendChild(sec);
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1] || "");
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   // ===== 행사 계약 탭: 부스위치 / 배치도+마커 / 차량 입차시간 =====
