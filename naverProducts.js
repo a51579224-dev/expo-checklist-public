@@ -39,51 +39,49 @@ async function getAccessToken() {
 }
 
 // 상품명으로 검색 — 조회 전용(판매가/재고 수정 등 쓰기 API는 호출하지 않음).
-// ⚠️ 실제 응답 스키마는 "상품" 권한그룹이 승인된 뒤 라이브로 한 번 호출해서 확인 후
-// 아래 매핑(mapSearchResult)을 맞춰야 한다 — 지금은 문서/추정 기반 초안.
-export async function searchProducts(query, { page = 1, size = 20 } = {}) {
+// ⚠️ 2026-11-12 "상품" 권한그룹 승인 후 라이브로 실제 응답을 확인해서 맞춘 버전.
+//
+// 확인된 사실:
+// - /v1/products/search 는 searchKeyword로 서버 쪽 필터링을 해주지 않음(실제로 넣어봐도
+//   전체 결과가 그대로 옴) — 그래서 전체 상품을 가져온 뒤 이름으로 직접 필터링한다.
+// - 응답은 { contents: [{ originProductNo, channelProducts: [{...}] }], totalElements, ... }
+//   형태이고, 옵션(사이즈/색상 등)별로 나뉜 행은 따로 안 내려줌 — channelProducts 하나가
+//   그 등록상품 전체를 뜻함(옵션은 네이버 자체 옵션 UI에 들어있어도 이 응답엔 안 보임).
+//   그래서 naverOptionId는 항상 빈 값으로 두고, 옵션 구분은 품목명에 들어있는 문구(상품명)
+//   를 그대로 보여주는 선에서 처리한다.
+// - 가격은 discountedPrice(실제 판매가)를 우선 쓰고 없으면 salePrice(정가).
+// - statusType이 'SALE'이 아닌 상품(종료된 공동구매 등)은 박람회 준비 목적상 의미가
+//   없어서 검색 결과에서 제외한다.
+const PAGE_SIZE = 500; // PET TIMES 등록 상품 수가 수백 개 단위라 한 번에 다 가져와도 무리 없음
+
+export async function searchProducts(query) {
   const token = await getAccessToken();
   const res = await fetch(`${BASE}/v1/products/search`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ page, size, searchKeyword: query }),
+    body: JSON.stringify({ page: 1, size: PAGE_SIZE }),
   });
   if (!res.ok) throw new Error(`네이버 상품 조회 실패 (${res.status}): ${await res.text()}`);
   const json = await res.json();
-  return mapSearchResult(json);
+  const all = mapSearchResult(json);
+  const q = query.trim().toLowerCase();
+  if (!q) return all;
+  return all.filter((row) => row.name.toLowerCase().includes(q));
 }
 
-// 네이버가 돌려주는 원본 구조를 화면에서 바로 쓰기 좋은 평평한 배열로 변환.
-// contents[].channelProducts[] 형태(옵션 없는 단일상품) + 옵션 있는 상품(optionCombinations 등)
-// 둘 다 있을 수 있어서, 최대한 안전하게 옵션별로 1행씩 펼친다. 실제 필드명이 다르면
-// 이 함수만 고치면 된다(호출부는 그대로).
 function mapSearchResult(json) {
-  const contents = json?.contents ?? json?.data?.contents ?? [];
+  const contents = json?.contents ?? [];
   const rows = [];
   for (const item of contents) {
-    const product = item.channelProducts?.[0] ?? item;
-    const productNo = product.originProductNo ?? product.channelProductNo ?? product.productNo;
-    const name = product.name ?? product.channelProductName ?? "(상품명 없음)";
-    const options = product.optionCombinations ?? product.options ?? [];
-    if (Array.isArray(options) && options.length > 0) {
-      for (const opt of options) {
-        rows.push({
-          naverProductId: String(productNo),
-          naverOptionId: String(opt.id ?? opt.optionId ?? opt.combinationNo ?? ""),
-          name,
-          optionName: opt.optionName1 ?? opt.name ?? opt.optionName ?? "",
-          price: opt.price ?? opt.stockQuantity !== undefined ? opt.price : product.salePrice,
-          stockQuantity: opt.stockQuantity ?? null,
-        });
-      }
-    } else {
+    for (const cp of item.channelProducts ?? []) {
+      if (cp.statusType && cp.statusType !== "SALE") continue;
       rows.push({
-        naverProductId: String(productNo),
+        naverProductId: String(cp.originProductNo ?? item.originProductNo ?? cp.channelProductNo),
         naverOptionId: "",
-        name,
+        name: cp.name ?? "(상품명 없음)",
         optionName: "",
-        price: product.salePrice ?? null,
-        stockQuantity: product.stockQuantity ?? null,
+        price: cp.discountedPrice ?? cp.salePrice ?? null,
+        stockQuantity: cp.stockQuantity ?? null,
       });
     }
   }
