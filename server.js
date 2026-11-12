@@ -43,21 +43,65 @@ const DEFAULT_TEMPLATE_ITEMS = {
   // 2026-11-11: '상품 재고'도 고정 체크리스트 문구 대신, 행사마다 품목을 직접 입력하는
   // 수량(CTN/PC)+준비완료+차량적재완료 전용 화면으로 바뀌어서 기본 항목을 비워둠.
   inventory: [],
-  // 2026-11-11: '집기'도 체크리스트 문구 나열 대신, 분류(그룹)별로 묶어서 한눈에 보는 화면으로 바뀜.
-  // "부스 꾸미기"/"작업 도구"/"전기용품"은 어느 브랜드든 공통으로 쓰는 고정 분류 — 기본 품목을 미리 채워둠.
-  // "상품별 진열 집기"는 분류 자체를 브랜드가 +/-로 직접 만드는 영역이라 공통 템플릿엔 비워둠.
+  // 2026-11-12: '집기' 공용 분류를 6개로 다시 짜고(부스 설치·꾸미기/공용 진열·안내/
+  // 설치·작업 도구/전기·조명/결제·포장/운반·보관·철수) 각 분류 기본 품목을 채움.
+  // "상품별 진열 집기"(예: 찹찹식기, 쿠션 등)는 여전히 분류 자체를 브랜드가 +/-로
+  // 직접 만드는 영역이라 공통 템플릿엔 비워둠.
   supplies: [
-    { group: "부스 꾸미기", text: "테이블" },
-    { group: "부스 꾸미기", text: "벽면 장식물" },
-    { group: "부스 꾸미기", text: "간판" },
-    { group: "부스 꾸미기", text: "테이블보" },
-    { group: "부스 꾸미기", text: "테이블 현수막" },
-    { group: "작업 도구", text: "가위" },
-    { group: "작업 도구", text: "테이프" },
-    { group: "작업 도구", text: "테이프 커터기" },
-    { group: "작업 도구", text: "매직" },
-    { group: "작업 도구", text: "볼펜" },
-    { group: "전기용품", text: "멀티탭" },
+    { group: "부스 설치·꾸미기", text: "접이식 테이블" },
+    { group: "부스 설치·꾸미기", text: "의자 또는 스툴" },
+    { group: "부스 설치·꾸미기", text: "테이블보" },
+    { group: "부스 설치·꾸미기", text: "테이블 현수막" },
+    { group: "부스 설치·꾸미기", text: "브랜드 간판" },
+    { group: "부스 설치·꾸미기", text: "벽면 장식물·포스터" },
+    { group: "부스 설치·꾸미기", text: "배너와 거치대" },
+    { group: "부스 설치·꾸미기", text: "테이블보 고정 클립" },
+    { group: "부스 설치·꾸미기", text: "가림천 — 테이블 아래 재고나 박스 가리기" },
+
+    { group: "공용 진열·안내", text: "진열 선반" },
+    { group: "공용 진열·안내", text: "높낮이 진열 받침대" },
+    { group: "공용 진열·안내", text: "소품 진열 바구니" },
+    { group: "공용 진열·안내", text: "가격표와 가격표 꽂이" },
+    { group: "공용 진열·안내", text: "행사 혜택 안내판" },
+    { group: "공용 진열·안내", text: "인스타그램·스토어 QR 안내판" },
+    { group: "공용 진열·안내", text: "리플렛과 리플렛 꽂이" },
+
+    { group: "설치·작업 도구", text: "가위" },
+    { group: "설치·작업 도구", text: "커터칼" },
+    { group: "설치·작업 도구", text: "박스 테이프" },
+    { group: "설치·작업 도구", text: "테이프 커터기" },
+    { group: "설치·작업 도구", text: "마스킹테이프" },
+    { group: "설치·작업 도구", text: "탈부착용 양면테이프" },
+    { group: "설치·작업 도구", text: "케이블타이" },
+    { group: "설치·작업 도구", text: "집게·S자 고리" },
+    { group: "설치·작업 도구", text: "줄자" },
+    { group: "설치·작업 도구", text: "드라이버·육각렌치" },
+    { group: "설치·작업 도구", text: "매직·볼펜" },
+    { group: "설치·작업 도구", text: "박스 분류용 라벨" },
+
+    { group: "전기·조명", text: "멀티탭" },
+    { group: "전기·조명", text: "연장선" },
+    { group: "전기·조명", text: "진열용 조명" },
+    { group: "전기·조명", text: "휴대폰·태블릿 충전기" },
+    { group: "전기·조명", text: "보조배터리" },
+    { group: "전기·조명", text: "바닥 전선 커버 또는 전선 고정용 테이프" },
+
+    { group: "결제·포장", text: "카드 단말기와 충전기" },
+    { group: "결제·포장", text: "결제·재고 확인용 휴대폰 또는 태블릿" },
+    { group: "결제·포장", text: "현금 보관함과 거스름돈 — 현금 결제 시" },
+    { group: "결제·포장", text: "쇼핑백 — 사이즈별" },
+    { group: "결제·포장", text: "완충재 — 식기 포장용" },
+    { group: "결제·포장", text: "포장용 스티커" },
+    { group: "결제·포장", text: "주문·품절 메모지" },
+
+    { group: "운반·보관·철수", text: "접이식 카트" },
+    { group: "운반·보관·철수", text: "뚜껑 있는 운반 박스" },
+    { group: "운반·보관·철수", text: "집기 보호용 완충재 또는 커버" },
+    { group: "운반·보관·철수", text: "운반용 고정 스트랩" },
+    { group: "운반·보관·철수", text: "작업 장갑" },
+    { group: "운반·보관·철수", text: "물티슈·마른 행주" },
+    { group: "운반·보관·철수", text: "쓰레기봉투" },
+    { group: "운반·보관·철수", text: "철수용 여분 박스" },
   ],
   // 2026-11-11: '철수 정산'도 체크리스트 대신 남은재고/일별매출/판매내역업로드/개선사항 전용 화면으로 바뀜.
   settlement: [],
@@ -505,6 +549,22 @@ app.delete("/api/events/:slug/categories/:catId/items/:itemId", async (req, res)
     if (cat.items.length === before) return res.status(404).json({ error: "존재하지 않는 항목이에요." });
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
     res.json({ ok: true, progress: computeProgress(ev.categories) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || err) });
+  }
+});
+
+// 카테고리 안 품목 전체 삭제 — CSV로 잘못 불러왔을 때 등 한 번에 비우기용
+app.delete("/api/events/:slug/categories/:catId/items", async (req, res) => {
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const ev = rowToEvent(row);
+    const cat = findCategory(ev, req.params.catId);
+    const removed = cat.items.length;
+    cat.items = [];
+    await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
+    res.json({ ok: true, removed, progress: computeProgress(ev.categories) });
   } catch (err) {
     res.status(err.status || 500).json({ error: String(err.message || err) });
   }

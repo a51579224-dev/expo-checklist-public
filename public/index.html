@@ -122,6 +122,7 @@
   .inv-add-row input { flex: 1; min-width: 160px; }
   .inv-add-row button { width: auto; white-space: nowrap; margin: 0; }
   .inv-naver-btn { background: #03c75a; } /* 네이버 브랜드 녹색 — 버튼만 구분되게, 나머지 테마는 그대로 */
+  .inv-clearall-btn { background: #fff; color: #c23b2e; border: 1px solid #c23b2e; }
   .inv-naver-box { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 16px; background: var(--accent-light); }
   .inv-naver-search { display: flex; gap: 8px; margin-bottom: 10px; }
   .inv-naver-search input { flex: 1; background: #fff; }
@@ -681,6 +682,17 @@
       box.style.display = box.style.display === "none" ? "block" : "none";
     });
     addRow.appendChild(csvBtn);
+    if (items.length > 0) {
+      const clearAllBtn = document.createElement("button");
+      clearAllBtn.className = "small inv-clearall-btn";
+      clearAllBtn.textContent = "전체 삭제";
+      clearAllBtn.addEventListener("click", async () => {
+        if (!confirm(`상품 재고 품목 ${items.length}개를 전부 삭제할까요? 되돌릴 수 없어요.`)) return;
+        await fetch(`${API}/${currentSlug}/categories/inventory/items`, { method: "DELETE" });
+        await refreshDetail();
+      });
+      addRow.appendChild(clearAllBtn);
+    }
     container.appendChild(addRow);
 
     container.appendChild(buildInventoryCsvBox());
@@ -1324,7 +1336,7 @@
   }
 
   // ===== 집기 탭: 분류(그룹)별로 묶어서 품목·수량·준비완료 관리 =====
-  const SUPPLIES_FIXED_GROUPS = ["부스 꾸미기", "작업 도구", "전기용품"];
+  const SUPPLIES_FIXED_GROUPS = ["부스 설치·꾸미기", "공용 진열·안내", "설치·작업 도구", "전기·조명", "결제·포장", "운반·보관·철수"];
 
   async function addSuppliesItem(group, textInput) {
     const text = textInput.value.trim();
