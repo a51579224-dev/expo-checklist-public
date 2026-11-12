@@ -7,7 +7,6 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parsePosExcel } from "./posParser.js";
-import { isNaverConfigured, searchProducts } from "./naverProducts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -377,25 +376,8 @@ app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
   }
 });
 
-// 네이버 스마트스토어 연동 — PET TIMES 서버에만 환경변수가 설정돼 있을 때만 동작함(조회 전용).
-// 다른 브랜드 복제본은 이 라우트들이 전부 "연동 안 됨"으로만 응답하고, 화면에서도 버튼 자체가 안 보임.
-app.get("/api/naver/status", (_req, res) => {
-  res.json({ enabled: isNaverConfigured() });
-});
-
-app.get("/api/naver/products/search", async (req, res) => {
-  if (!isNaverConfigured()) return res.status(501).json({ error: "이 서버엔 스마트스토어 연동이 설정되어 있지 않아요." });
-  const q = String(req.query.q || "").trim(); // 비어있으면 전체 목록(판매중 상품)을 그대로 돌려줌
-  try {
-    const rows = await searchProducts(q);
-    res.json({ rows });
-  } catch (err) {
-    res.status(500).json({ error: String(err.message || err) });
-  }
-});
-
-// 스마트스토어에서 고른 상품/옵션을 '상품 재고' 품목으로 일괄 추가 — naverProductId+naverOptionId
-// 기준으로 이미 추가된 건 건너뛰어서, 목록을 여러 번 다시 불러와도 중복되지 않게 함.
+// 스마트스토어 상품 목록 CSV에서 고른 상품을 '상품 재고' 품목으로 일괄 추가 — naverProductId
+// 기준으로 이미 추가된 건 건너뛰어서, CSV를 여러 번 다시 올려도 중복되지 않게 함.
 app.post("/api/events/:slug/categories/inventory/naver-import", async (req, res) => {
   const { items } = req.body ?? {};
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "추가할 상품을 선택해주세요." });

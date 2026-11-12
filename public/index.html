@@ -309,7 +309,6 @@
   let currentCatId = "contract";
   let lastAnimatedCatId = null;
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
-  let naverEnabled = false; // 이 서버(PET TIMES용)에 스마트스토어 연동이 설정돼 있을 때만 true
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -403,10 +402,6 @@
         document.getElementById("dt-link").textContent = location.origin + "/e/" + slug;
         sessionStorage.removeItem("justCreated");
       }
-      try {
-        const r = await fetch("/api/naver/status");
-        naverEnabled = (await r.json()).enabled;
-      } catch { naverEnabled = false; }
       await refreshDetail();
     }
   }
@@ -624,21 +619,17 @@
     });
     addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addBtn.click(); });
     addRow.append(addInput, addBtn);
-    // 버튼은 항상 보이게 두고(연동 설정 전이어도 화면에서 바로 확인 가능하도록),
-    // 실제 연동이 안 돼 있으면 검색 시도할 때 서버가 안내 메시지를 내려줌.
-    const naverBtn = document.createElement("button");
-    naverBtn.className = "small inv-naver-btn";
-    naverBtn.textContent = "스마트스토어에서 상품 불러오기";
-    naverBtn.addEventListener("click", () => {
-      const box = document.getElementById("inv-naver-box");
-      const opening = box.style.display === "none";
-      box.style.display = opening ? "block" : "none";
-      if (opening) box.loadList();
+    const csvBtn = document.createElement("button");
+    csvBtn.className = "small inv-naver-btn";
+    csvBtn.textContent = "엑셀(CSV)로 상품 불러오기";
+    csvBtn.addEventListener("click", () => {
+      const box = document.getElementById("inv-csv-box");
+      box.style.display = box.style.display === "none" ? "block" : "none";
     });
-    addRow.appendChild(naverBtn);
+    addRow.appendChild(csvBtn);
     container.appendChild(addRow);
 
-    container.appendChild(buildNaverImportBox());
+    container.appendChild(buildInventoryCsvBox());
 
     // 필터 적용
     const visibleItems = items.filter((it) => {
@@ -665,37 +656,40 @@
     visibleItems.forEach((it) => container.appendChild(buildInventoryCard(it)));
   }
 
-  // 스마트스토어 상품 불러오기(PET TIMES 전용, 조회만 — 수동 추가는 그대로 계속 쓸 수 있음)
-  // 버튼을 누르면 바로 전체 상품 목록이 쫙 나오고, 체크한 것만 "확인"으로 한 번에 추가하는 방식.
-  function buildNaverImportBox() {
+  // 스마트스토어 어드민에서 내려받은 상품 목록 CSV를 올리면, 판매중인 상품이 쫙 나오고
+  // 체크한 것만 "확인"으로 한 번에 추가하는 방식(네이버 API 연동 없이, 파일만으로 동작).
+  function buildInventoryCsvBox() {
     const box = document.createElement("div");
     box.className = "inv-naver-box";
-    box.id = "inv-naver-box";
+    box.id = "inv-csv-box";
     box.style.display = "none";
-    box.innerHTML = `<div class="inv-naver-hint">PET TIMES 스마트스토어에 등록된 상품이에요. 이번 박람회에 가져갈 품목만 체크하고 확인을 눌러주세요. 이미 추가한 상품은 다시 불러와도 중복되지 않아요.</div>`;
+    box.innerHTML = `<div class="inv-naver-hint">스마트스토어 어드민 → 상품관리 → 상품 목록 엑셀 다운로드(CSV)로 받은 파일을 올려주세요. 판매중인 상품이 쫙 나오면 가져갈 것만 체크하고 확인을 누르면 돼요. 이미 추가한 상품은 다시 올려도 중복되지 않아요.</div>`;
 
-    const filterRow = document.createElement("div");
-    filterRow.className = "inv-naver-search";
+    const fileRow = document.createElement("div");
+    fileRow.className = "inv-naver-search";
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".csv,text/csv";
     const filterInput = document.createElement("input");
     filterInput.type = "text";
     filterInput.placeholder = "목록 안에서 찾기 (선택)";
-    filterRow.appendChild(filterInput);
+    filterInput.style.display = "none";
+    fileRow.append(fileInput, filterInput);
 
     const resultsEl = document.createElement("div");
     resultsEl.className = "inv-naver-results";
+    resultsEl.innerHTML = `<div class="hint">CSV 파일을 선택해주세요.</div>`;
 
     let allRows = [];
-    const checked = new Set(); // key: naverProductId::naverOptionId
-    const rowKey = (r) => `${r.naverProductId}::${r.naverOptionId || ""}`;
+    const checked = new Set(); // key: naverProductId
+    const rowKey = (r) => r.naverProductId;
 
     const renderList = () => {
       const q = filterInput.value.trim().toLowerCase();
-      const rows = !q ? allRows : allRows.filter((r) =>
-        (r.optionName ? `${r.name} ${r.optionName}` : r.name).toLowerCase().includes(q)
-      );
+      const rows = !q ? allRows : allRows.filter((r) => r.name.toLowerCase().includes(q));
       resultsEl.innerHTML = "";
       if (rows.length === 0) {
-        resultsEl.innerHTML = `<div class="hint">${q ? "찾는 상품이 없어요." : "등록된 상품이 없어요."}</div>`;
+        resultsEl.innerHTML = `<div class="hint">${q ? "찾는 상품이 없어요." : "판매중인 상품이 없어요."}</div>`;
         return;
       }
       rows.forEach((r) => {
@@ -708,7 +702,7 @@
         cb.addEventListener("change", () => { if (cb.checked) checked.add(key); else checked.delete(key); });
         const info = document.createElement("span");
         info.className = "info";
-        info.textContent = r.optionName ? `${r.name} - ${r.optionName}` : r.name;
+        info.textContent = r.name;
         const price = document.createElement("span");
         price.className = "price";
         price.textContent = r.price ? `${Number(r.price).toLocaleString()}원` : "";
@@ -718,19 +712,26 @@
     };
     filterInput.addEventListener("input", renderList);
 
-    box.loadList = async () => {
-      resultsEl.innerHTML = `<div class="hint">상품 목록을 불러오는 중...</div>`;
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      resultsEl.innerHTML = `<div class="hint">읽는 중...</div>`;
+      filterInput.style.display = "none";
       try {
-        const res = await fetch(`/api/naver/products/search?q=`);
-        const body = await res.json();
-        if (!res.ok) { resultsEl.innerHTML = `<div class="error">${escapeHtml(body.error || "불러오기 실패")}</div>`; return; }
-        allRows = body.rows || [];
+        const text = await file.text();
+        const rows = csvRowsToProducts(text);
+        if (rows === null) {
+          resultsEl.innerHTML = `<div class="error">스마트스토어 상품 목록 CSV가 맞는지 확인해주세요(상품명/상품번호 칼럼을 찾을 수 없어요).</div>`;
+          return;
+        }
+        allRows = rows;
         checked.clear();
+        filterInput.style.display = allRows.length ? "" : "none";
         renderList();
       } catch (e) {
-        resultsEl.innerHTML = `<div class="error">목록을 불러오는 중 오류가 발생했어요.</div>`;
+        resultsEl.innerHTML = `<div class="error">파일을 읽는 중 오류가 발생했어요.</div>`;
       }
-    };
+    });
 
     const actions = document.createElement("div");
     actions.className = "inv-naver-actions";
@@ -751,8 +752,60 @@
     });
     actions.appendChild(addBtn);
 
-    box.append(filterRow, resultsEl, actions);
+    box.append(fileRow, resultsEl, actions);
     return box;
+  }
+
+  // 스마트스토어 상품 목록 CSV 파싱 — 따옴표로 감싼 칸 안의 줄바꿈/쉼표도 올바르게 처리.
+  function parseCsv(text) {
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // BOM 제거
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+        else field += c;
+      } else if (c === '"') inQuotes = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\r") { /* \n에서 처리 */ }
+      else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+      else field += c;
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  // 판매중 상품만 { naverProductId, naverOptionId, name, price } 로 뽑아냄.
+  // 칼럼 이름을 못 찾으면(다른 양식의 CSV) null을 돌려줘서 안내 메시지를 보여줄 수 있게 함.
+  function csvRowsToProducts(text) {
+    const rows = parseCsv(text).filter((r) => r.length > 1 || (r[0] ?? "").trim() !== "");
+    if (rows.length === 0) return [];
+    const header = rows[0];
+    const iName = header.indexOf("상품명");
+    const iProductId = header.indexOf("상품번호(스마트스토어)");
+    if (iName === -1 || iProductId === -1) return null;
+    const iStatus = header.indexOf("판매상태");
+    const iSalePrice = header.indexOf("판매가");
+    const iDiscountPrice = header.indexOf("할인가");
+    const toNumber = (v) => {
+      const n = Number(String(v ?? "").replace(/[^0-9]/g, ""));
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const out = [];
+    const seen = new Set();
+    for (let r = 1; r < rows.length; r++) {
+      const cols = rows[r];
+      const name = (cols[iName] || "").trim();
+      if (!name) continue;
+      if (iStatus !== -1 && (cols[iStatus] || "").trim() !== "판매중") continue;
+      const productId = (cols[iProductId] || "").trim() || name;
+      if (seen.has(productId)) continue;
+      seen.add(productId);
+      const price = toNumber(cols[iDiscountPrice]) ?? toNumber(cols[iSalePrice]);
+      out.push({ naverProductId: productId, naverOptionId: "", name, price });
+    }
+    return out;
   }
 
   function buildInventoryCard(it) {
