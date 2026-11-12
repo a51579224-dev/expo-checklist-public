@@ -128,10 +128,13 @@
   .inv-naver-search button { width: auto; margin: 0; white-space: nowrap; }
   .inv-naver-selectall { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 6px; cursor: pointer; }
   .inv-naver-results { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 10px; }
-  .inv-naver-result-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); background: #fff; }
+  .inv-naver-result-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); background: #fff; }
   .inv-naver-result-row:last-child { border-bottom: none; }
   .inv-naver-result-row .info { flex: 1; font-size: 14px; }
   .inv-naver-result-row .price { font-size: 13px; color: var(--muted); }
+  .inv-naver-opt-badge { font-size: 11px; background: #fff3e0; color: #b45f06; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
+  .inv-naver-opt-wrap { flex: 1 0 100%; margin: 0 0 4px 26px; }
+  .inv-naver-opt-wrap input { width: 100%; font-size: 13px; padding: 6px 10px; background: #fffdf8; }
   .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .inv-naver-actions button { width: auto; margin: 0; }
   .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
@@ -691,6 +694,7 @@
     let allRows = [];
     let rowEls = []; // { key, cb } — 체크박스 하나 토글할 때 목록 전체를 다시 그리지 않고(스크롤 유지) 전체선택 상태만 갱신하려고 기억해둠
     const checked = new Set(); // key: naverProductId
+    const optionText = new Map(); // key: naverProductId -> 사용자가 입력한 옵션명(쉼표 구분) 원문
     const rowKey = (r) => r.naverProductId;
     const visibleRows = () => {
       const q = filterInput.value.trim().toLowerCase();
@@ -725,10 +729,25 @@
         const info = document.createElement("span");
         info.className = "info";
         info.textContent = r.name;
+        if (r.hasOptions) {
+          info.appendChild(document.createTextNode(" "));
+          info.appendChild(span("inv-naver-opt-badge", "옵션있음"));
+        }
         const price = document.createElement("span");
         price.className = "price";
         price.textContent = r.price ? `${Number(r.price).toLocaleString()}원` : "";
         row.append(cb, info, price);
+        if (r.hasOptions) {
+          const optWrap = document.createElement("div");
+          optWrap.className = "inv-naver-opt-wrap";
+          const optInput = document.createElement("input");
+          optInput.type = "text";
+          optInput.placeholder = "옵션명을 쉼표로 구분해서 입력 (예: 레드, 블루) — 비워두면 상품명 그대로 추가돼요";
+          optInput.value = optionText.get(key) || "";
+          optInput.addEventListener("input", () => optionText.set(key, optInput.value));
+          optWrap.appendChild(optInput);
+          row.appendChild(optWrap);
+        }
         resultsEl.appendChild(row);
         rowEls.push({ key, cb });
       });
@@ -758,6 +777,7 @@
         }
         allRows = rows;
         checked.clear();
+        optionText.clear();
         filterInput.style.display = allRows.length ? "" : "none";
         renderList();
       } catch (e) {
@@ -773,8 +793,20 @@
     addBtn.addEventListener("click", async () => {
       const selected = allRows.filter((r) => checked.has(rowKey(r)));
       if (selected.length === 0) { alert("가져갈 상품을 체크해주세요."); return; }
+      // 옵션명을 입력한 상품은 옵션별로 품목을 따로 만들고, 안 적었으면 상품명 그대로 하나만 추가.
+      const items = [];
+      selected.forEach((r) => {
+        const optNames = (optionText.get(rowKey(r)) || "").split(",").map((s) => s.trim()).filter(Boolean);
+        if (optNames.length === 0) {
+          items.push({ naverProductId: r.naverProductId, naverOptionId: "", name: r.name, price: r.price });
+        } else {
+          optNames.forEach((optName) => {
+            items.push({ naverProductId: r.naverProductId, naverOptionId: optName, optionName: optName, name: r.name, price: r.price });
+          });
+        }
+      });
       const res = await fetch(`${API}/${currentSlug}/categories/inventory/naver-import`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: selected }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }),
       });
       const body = await res.json();
       if (res.ok && body.skipped > 0) {
@@ -808,7 +840,9 @@
     return rows;
   }
 
-  // 판매중 상품만 { naverProductId, naverOptionId, name, price } 로 뽑아냄.
+  // 판매중 상품만 { naverProductId, naverOptionId, name, price, hasOptions } 로 뽑아냄.
+  // hasOptions: 네이버에 사이즈/색상 등 옵션이 걸려있는 상품(CSV엔 "옵션=Y" 표시만 있고
+  // 실제 옵션명은 없음) — 체크리스트에서 직접 옵션명을 입력할 수 있게 표시해줄 때 씀.
   // 칼럼 이름을 못 찾으면(다른 양식의 CSV) null을 돌려줘서 안내 메시지를 보여줄 수 있게 함.
   function csvRowsToProducts(text) {
     const rows = parseCsv(text).filter((r) => r.length > 1 || (r[0] ?? "").trim() !== "");
@@ -820,6 +854,7 @@
     const iStatus = header.indexOf("판매상태");
     const iSalePrice = header.indexOf("판매가");
     const iDiscountPrice = header.indexOf("할인가");
+    const iOption = header.indexOf("옵션");
     const toNumber = (v) => {
       const n = Number(String(v ?? "").replace(/[^0-9]/g, ""));
       return Number.isFinite(n) && n > 0 ? n : null;
@@ -835,7 +870,8 @@
       if (seen.has(productId)) continue;
       seen.add(productId);
       const price = toNumber(cols[iDiscountPrice]) ?? toNumber(cols[iSalePrice]);
-      out.push({ naverProductId: productId, naverOptionId: "", name, price });
+      const hasOptions = iOption !== -1 && (cols[iOption] || "").trim() === "Y";
+      out.push({ naverProductId: productId, naverOptionId: "", name, price, hasOptions });
     }
     return out;
   }
