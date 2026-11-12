@@ -1260,6 +1260,7 @@
           };
           addValBtn.addEventListener("click", commitValues);
           valueInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitValues(); } });
+          valueInput.addEventListener("change", commitValues); // "값 추가" 안 누르고 다른 데 클릭해도 타이핑한 값이 그냥 버려지지 않게
           addRow.append(valueInput, addValBtn);
           body.appendChild(addRow);
 
