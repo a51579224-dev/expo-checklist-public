@@ -409,6 +409,45 @@ app.post("/api/events/:slug/categories/inventory/naver-import", async (req, res)
   }
 });
 
+// 품목 하나를 옵션 조합별로 여러 품목으로 쪼갬 — body: { combos: ["핑크 / 핑크", ...] }
+// 원래 품목 자리에 조합 개수만큼 새 품목을 넣고(순서 유지), 원래 품목은 없앰.
+// naverProductId가 없는(CSV로 안 들여온) 품목은 품목 자체 id를 조합 구분 키로 씀.
+app.post("/api/events/:slug/categories/:catId/items/:itemId/split-options", async (req, res) => {
+  const { combos } = req.body ?? {};
+  if (!Array.isArray(combos) || combos.length === 0) return res.status(400).json({ error: "옵션 조합이 필요해요." });
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const ev = rowToEvent(row);
+    const cat = findCategory(ev, req.params.catId);
+    const idx = cat.items.findIndex((it) => it.id === req.params.itemId);
+    if (idx === -1) return res.status(404).json({ error: "존재하지 않는 항목이에요." });
+    const base = cat.items[idx];
+    const baseName = base.text.split(" - ")[0];
+    const groupKey = base.naverProductId || base.id;
+    const existingKeys = new Set(
+      cat.items.filter((it, i) => i !== idx && (it.naverProductId || it.id) === groupKey).map((it) => `${it.naverProductId || it.id}::${it.naverOptionId || ""}`)
+    );
+    const newItems = [];
+    let skipped = 0;
+    combos.forEach((label) => {
+      const key = `${groupKey}::${label}`;
+      if (existingKeys.has(key)) { skipped++; return; }
+      existingKeys.add(key);
+      newItems.push({
+        id: newId("item"), text: `${baseName} - ${label}`, done: false,
+        naverProductId: base.naverProductId || base.id, naverOptionId: label,
+      });
+    });
+    if (newItems.length === 0) return res.status(400).json({ error: "전부 이미 있는 옵션이에요." });
+    cat.items.splice(idx, 1, ...newItems);
+    await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
+    res.json({ added: newItems.length, skipped, progress: computeProgress(ev.categories), items: cat.items });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || err) });
+  }
+});
+
 // 숫자 입력칸 공용 보정: 빈값/음수/NaN은 전부 null로 (저장은 하되 억지로 0을 넣지 않음)
 function normalizeQty(v) {
   if (v === undefined) return undefined; // 아예 안 보낸 필드는 건드리지 않음

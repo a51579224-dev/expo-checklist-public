@@ -167,6 +167,9 @@
   }
   .inv-drag-handle:active { cursor: grabbing; background: var(--accent-light); }
   .inv-option-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; margin-bottom: 8px; background: #fffdf8; }
+  .inv-split-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 13px; font-weight: 700; padding: 0; margin: 0 0 8px; text-align: left; }
+  .inv-split-panel { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #fffdf8; }
+  .inv-split-panel .inv-optgroup-wrap { margin-bottom: 10px; }
   .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   .inv-qty-row .qlbl { font-size: 13px; color: var(--muted); flex-shrink: 0; width: 44px; }
   .inv-qty-row input[type="number"] {
@@ -358,6 +361,8 @@
   let currentCatId = "contract";
   let lastAnimatedCatId = null;
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
+  const cardOptionGroups = new Map(); // 품목 id -> 옵션 나누기용 그룹 배열(카드 다시 그려도 입력 중이던 내용 유지)
+  const cardOptionOpen = new Set(); // "옵션 나누기" 패널을 펼쳐둔 품목 id들
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -742,140 +747,7 @@
     let allRows = [];
     let rowEls = []; // { key, cb } — 체크박스 하나 토글할 때 목록 전체를 다시 그리지 않고(스크롤 유지) 전체선택 상태만 갱신하려고 기억해둠
     const checked = new Set(); // key: naverProductId
-    // key: naverProductId -> 옵션 그룹 배열 [{ name, items:[{value,checked}], open }]
-    // 네이버 상품페이지처럼 "밑식기"/"윗그릇" 같은 그룹별로 색상 등 값을 체크하고,
-    // 그룹이 여러 개면 그룹끼리 조합(예: 핑크/핑크, 핑크/블루)해서 품목을 만듦.
-    const optionGroups = new Map();
     const rowKey = (r) => r.naverProductId;
-
-    const ensureGroups = (key) => {
-      if (!optionGroups.has(key)) optionGroups.set(key, [{ name: "", items: [], open: true }]);
-      return optionGroups.get(key);
-    };
-
-    // 그룹별 체크된 값들의 조합(카테시안 곱)을 "값1 / 값2" 형태 라벨 배열로 만듦.
-    // 값이 하나도 안 체크된 그룹은 참여시키지 않음(전부 비어있으면 빈 배열 반환).
-    const cartesianOptionCombos = (groups) => {
-      const participating = groups.map((g) => g.items.filter((v) => v.checked).map((v) => v.value)).filter((arr) => arr.length > 0);
-      if (participating.length === 0) return [];
-      let combos = [[]];
-      participating.forEach((values) => {
-        const next = [];
-        combos.forEach((combo) => values.forEach((v) => next.push([...combo, v])));
-        combos = next;
-      });
-      return combos.map((combo) => combo.join(" / "));
-    };
-
-    // 옵션 있는 상품 한 줄에 붙는 "옵션 그룹 설정" UI — 그룹 추가/이름 변경/값 추가/체크를
-    // 이 블록 안에서만 다시 그려서(전체 목록 재렌더 X) 스크롤과 다른 행 상태가 안 흔들리게 함.
-    const buildOptionGroupsUI = (key) => {
-      const wrap = document.createElement("div");
-      wrap.className = "inv-optgroup-wrap";
-
-      const render = () => {
-        wrap.innerHTML = "";
-        const groups = ensureGroups(key);
-        groups.forEach((g, gIdx) => {
-          const gEl = document.createElement("div");
-          gEl.className = "inv-optgroup";
-
-          const header = document.createElement("button");
-          header.type = "button";
-          header.className = "inv-optgroup-header";
-          const checkedCount = g.items.filter((v) => v.checked).length;
-          header.append(
-            span("inv-optgroup-name", g.name.trim() || `옵션 그룹 ${gIdx + 1}`),
-            span("inv-optgroup-count", g.items.length ? `${checkedCount}/${g.items.length}` : ""),
-            span("inv-optgroup-chev", g.open ? "▲" : "▼"),
-          );
-          header.addEventListener("click", () => { g.open = !g.open; render(); });
-          gEl.appendChild(header);
-
-          if (g.open) {
-            const body = document.createElement("div");
-            body.className = "inv-optgroup-body";
-
-            const nameInput = document.createElement("input");
-            nameInput.type = "text";
-            nameInput.placeholder = "그룹명 (예: 밑식기) — 그룹이 하나뿐이면 안 적어도 돼요";
-            nameInput.value = g.name;
-            nameInput.addEventListener("input", () => { g.name = nameInput.value; });
-            nameInput.addEventListener("change", () => {
-              header.querySelector(".inv-optgroup-name").textContent = g.name.trim() || `옵션 그룹 ${gIdx + 1}`;
-            });
-            body.appendChild(nameInput);
-
-            const addRow = document.createElement("div");
-            addRow.className = "inv-optgroup-addrow";
-            const valueInput = document.createElement("input");
-            valueInput.type = "text";
-            valueInput.placeholder = "값을 쉼표로 구분해서 입력 (예: 핑크, 블루, 그린)";
-            const addValBtn = document.createElement("button");
-            addValBtn.type = "button";
-            addValBtn.className = "small";
-            addValBtn.textContent = "값 추가";
-            const commitValues = () => {
-              const parts = valueInput.value.split(",").map((s) => s.trim()).filter(Boolean);
-              parts.forEach((p) => { if (!g.items.some((it) => it.value === p)) g.items.push({ value: p, checked: true }); });
-              if (parts.length) { valueInput.value = ""; render(); }
-            };
-            addValBtn.addEventListener("click", commitValues);
-            valueInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitValues(); } });
-            addRow.append(valueInput, addValBtn);
-            body.appendChild(addRow);
-
-            if (g.items.length) {
-              const list = document.createElement("div");
-              list.className = "inv-optgroup-list";
-              g.items.forEach((v) => {
-                const row = document.createElement("label");
-                row.className = "inv-optgroup-item";
-                const cb = document.createElement("input");
-                cb.type = "checkbox";
-                cb.checked = v.checked;
-                cb.addEventListener("change", () => { v.checked = cb.checked; render(); });
-                const delX = document.createElement("button");
-                delX.type = "button";
-                delX.className = "inv-optgroup-item-del";
-                delX.textContent = "×";
-                delX.addEventListener("click", () => { g.items = g.items.filter((x) => x !== v); render(); });
-                row.append(cb, document.createTextNode(v.value), delX);
-                list.appendChild(row);
-              });
-              body.appendChild(list);
-            }
-
-            if (groups.length > 1) {
-              const delGroupBtn = document.createElement("button");
-              delGroupBtn.type = "button";
-              delGroupBtn.className = "small";
-              delGroupBtn.textContent = "이 그룹 삭제";
-              delGroupBtn.addEventListener("click", () => {
-                optionGroups.set(key, groups.filter((x) => x !== g));
-                render();
-              });
-              body.appendChild(delGroupBtn);
-            }
-
-            gEl.appendChild(body);
-          }
-          wrap.appendChild(gEl);
-        });
-
-        const addGroupBtn = document.createElement("button");
-        addGroupBtn.type = "button";
-        addGroupBtn.className = "small";
-        addGroupBtn.textContent = "+ 옵션 그룹 추가 (예: 윗그릇)";
-        addGroupBtn.addEventListener("click", () => {
-          ensureGroups(key).push({ name: "", items: [], open: true });
-          render();
-        });
-        wrap.appendChild(addGroupBtn);
-      };
-      render();
-      return wrap;
-    };
     const visibleRows = () => {
       const q = filterInput.value.trim().toLowerCase();
       return !q ? allRows : allRows.filter((r) => r.name.toLowerCase().includes(q));
@@ -917,13 +789,6 @@
         price.className = "price";
         price.textContent = r.price ? `${Number(r.price).toLocaleString()}원` : "";
         row.append(cb, info, price);
-        if (r.hasOptions) {
-          ensureGroups(key);
-          const optWrap = document.createElement("div");
-          optWrap.className = "inv-naver-opt-wrap";
-          optWrap.appendChild(buildOptionGroupsUI(key));
-          row.appendChild(optWrap);
-        }
         resultsEl.appendChild(row);
         rowEls.push({ key, cb });
       });
@@ -953,7 +818,6 @@
         }
         allRows = rows;
         checked.clear();
-        optionGroups.clear();
         filterInput.style.display = allRows.length ? "" : "none";
         renderList();
       } catch (e) {
@@ -969,19 +833,9 @@
     addBtn.addEventListener("click", async () => {
       const selected = allRows.filter((r) => checked.has(rowKey(r)));
       if (selected.length === 0) { alert("가져갈 상품을 체크해주세요."); return; }
-      // 옵션 그룹에서 체크한 값이 있으면 그룹끼리 조합(예: 핑크/핑크)해서 품목을 따로 만들고,
-      // 하나도 안 체크했으면(옵션 없는 상품 포함) 상품명 그대로 하나만 추가.
-      const items = [];
-      selected.forEach((r) => {
-        const combos = r.hasOptions ? cartesianOptionCombos(optionGroups.get(rowKey(r)) || []) : [];
-        if (combos.length === 0) {
-          items.push({ naverProductId: r.naverProductId, naverOptionId: "", name: r.name, price: r.price });
-        } else {
-          combos.forEach((label) => {
-            items.push({ naverProductId: r.naverProductId, naverOptionId: label, optionName: label, name: r.name, price: r.price });
-          });
-        }
-      });
+      // 일단 상품명 그대로 하나씩만 추가 — 옵션이 있는 상품은 추가된 카드에서
+      // "옵션 나누기"로 색상/사이즈 조합별 품목을 따로 만들 수 있음.
+      const items = selected.map((r) => ({ naverProductId: r.naverProductId, naverOptionId: "", name: r.name, price: r.price }));
       const res = await fetch(`${API}/${currentSlug}/categories/inventory/naver-import`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }),
       });
@@ -1090,6 +944,45 @@
     optionInput.value = it.optionLabel || "";
     optionInput.addEventListener("change", () => saveField("optionLabel", optionInput.value));
     card.appendChild(optionInput);
+
+    // 옵션별로 나누기 — 이 품목 하나를 "밑식기/윗그릇" 같은 옵션 그룹×값 조합별로
+    // 여러 품목으로 쪼갬(네이버 상품페이지 옵션 선택 방식과 비슷하게).
+    const splitToggle = document.createElement("button");
+    splitToggle.type = "button";
+    splitToggle.className = "inv-split-toggle";
+    const setToggleLabel = () => { splitToggle.textContent = (cardOptionOpen.has(it.id) ? "▲ " : "▼ ") + "옵션별로 나누기"; };
+    setToggleLabel();
+    const panel = document.createElement("div");
+    panel.className = "inv-split-panel";
+    panel.style.display = cardOptionOpen.has(it.id) ? "" : "none";
+    splitToggle.addEventListener("click", () => {
+      if (cardOptionOpen.has(it.id)) cardOptionOpen.delete(it.id); else cardOptionOpen.add(it.id);
+      setToggleLabel();
+      panel.style.display = cardOptionOpen.has(it.id) ? "" : "none";
+    });
+    card.appendChild(splitToggle);
+
+    panel.appendChild(buildOptionGroupsUI(cardOptionGroups, it.id));
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "small";
+    applyBtn.textContent = "이 조합들로 품목 나누기";
+    applyBtn.addEventListener("click", async () => {
+      const combos = cartesianOptionCombos(cardOptionGroups.get(it.id) || []);
+      if (combos.length === 0) { alert("체크한 옵션 값이 없어요."); return; }
+      if (!confirm(`이 품목을 ${combos.length}개 옵션으로 나눌까요? (원래 품목은 없어지고 각 옵션별 품목으로 바뀌어요)`)) return;
+      const res = await fetch(`${API}/${currentSlug}/categories/inventory/items/${it.id}/split-options`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ combos }),
+      });
+      const body = await res.json();
+      if (!res.ok) { alert(body.error || "나누기에 실패했어요."); return; }
+      cardOptionGroups.delete(it.id);
+      cardOptionOpen.delete(it.id);
+      if (body.skipped > 0) alert(`${body.added}개 생성, ${body.skipped}개는 이미 있어서 건너뛰었어요.`);
+      await refreshDetail();
+    });
+    panel.appendChild(applyBtn);
+    card.appendChild(panel);
 
     // 준비 예정 수량: ①박스 하나당 PCS ②박스(CTN) 수량 → 자동계산 ③추가 PC(낱개)
     const planWrap = document.createElement("div");
@@ -1290,6 +1183,136 @@
     el.className = className;
     el.textContent = text;
     return el;
+  }
+
+  // 옵션 나누기(그룹+체크박스) — "밑식기"/"윗그릇" 같은 그룹을 추가하고 그룹마다
+  // 색상 등 값을 체크하는 UI. groupsMap은 key(품목 id 등)별 그룹 배열을 들고 있는
+  // Map으로, 호출하는 쪽(카드 등)이 넘겨줘서 재렌더링돼도 입력 상태가 안 날아가게 함.
+  function ensureOptionGroups(groupsMap, key) {
+    if (!groupsMap.has(key)) groupsMap.set(key, [{ name: "", items: [], open: true }]);
+    return groupsMap.get(key);
+  }
+
+  // 그룹별 체크된 값들의 조합(카테시안 곱)을 "값1 / 값2" 형태 라벨 배열로 만듦.
+  // 값이 하나도 안 체크된 그룹은 참여시키지 않음(전부 비어있으면 빈 배열 반환).
+  function cartesianOptionCombos(groups) {
+    const participating = groups.map((g) => g.items.filter((v) => v.checked).map((v) => v.value)).filter((arr) => arr.length > 0);
+    if (participating.length === 0) return [];
+    let combos = [[]];
+    participating.forEach((values) => {
+      const next = [];
+      combos.forEach((combo) => values.forEach((v) => next.push([...combo, v])));
+      combos = next;
+    });
+    return combos.map((combo) => combo.join(" / "));
+  }
+
+  function buildOptionGroupsUI(groupsMap, key) {
+    const wrap = document.createElement("div");
+    wrap.className = "inv-optgroup-wrap";
+
+    const render = () => {
+      wrap.innerHTML = "";
+      const groups = ensureOptionGroups(groupsMap, key);
+      groups.forEach((g, gIdx) => {
+        const gEl = document.createElement("div");
+        gEl.className = "inv-optgroup";
+
+        const header = document.createElement("button");
+        header.type = "button";
+        header.className = "inv-optgroup-header";
+        const checkedCount = g.items.filter((v) => v.checked).length;
+        header.append(
+          span("inv-optgroup-name", g.name.trim() || `옵션 그룹 ${gIdx + 1}`),
+          span("inv-optgroup-count", g.items.length ? `${checkedCount}/${g.items.length}` : ""),
+          span("inv-optgroup-chev", g.open ? "▲" : "▼"),
+        );
+        header.addEventListener("click", () => { g.open = !g.open; render(); });
+        gEl.appendChild(header);
+
+        if (g.open) {
+          const body = document.createElement("div");
+          body.className = "inv-optgroup-body";
+
+          const nameInput = document.createElement("input");
+          nameInput.type = "text";
+          nameInput.placeholder = "그룹명 (예: 밑식기) — 그룹이 하나뿐이면 안 적어도 돼요";
+          nameInput.value = g.name;
+          nameInput.addEventListener("input", () => { g.name = nameInput.value; });
+          nameInput.addEventListener("change", () => {
+            header.querySelector(".inv-optgroup-name").textContent = g.name.trim() || `옵션 그룹 ${gIdx + 1}`;
+          });
+          body.appendChild(nameInput);
+
+          const addRow = document.createElement("div");
+          addRow.className = "inv-optgroup-addrow";
+          const valueInput = document.createElement("input");
+          valueInput.type = "text";
+          valueInput.placeholder = "값을 쉼표로 구분해서 입력 (예: 핑크, 블루, 그린)";
+          const addValBtn = document.createElement("button");
+          addValBtn.type = "button";
+          addValBtn.className = "small";
+          addValBtn.textContent = "값 추가";
+          const commitValues = () => {
+            const parts = valueInput.value.split(",").map((s) => s.trim()).filter(Boolean);
+            parts.forEach((p) => { if (!g.items.some((it) => it.value === p)) g.items.push({ value: p, checked: true }); });
+            if (parts.length) { valueInput.value = ""; render(); }
+          };
+          addValBtn.addEventListener("click", commitValues);
+          valueInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitValues(); } });
+          addRow.append(valueInput, addValBtn);
+          body.appendChild(addRow);
+
+          if (g.items.length) {
+            const list = document.createElement("div");
+            list.className = "inv-optgroup-list";
+            g.items.forEach((v) => {
+              const row = document.createElement("label");
+              row.className = "inv-optgroup-item";
+              const cb = document.createElement("input");
+              cb.type = "checkbox";
+              cb.checked = v.checked;
+              cb.addEventListener("change", () => { v.checked = cb.checked; render(); });
+              const delX = document.createElement("button");
+              delX.type = "button";
+              delX.className = "inv-optgroup-item-del";
+              delX.textContent = "×";
+              delX.addEventListener("click", () => { g.items = g.items.filter((x) => x !== v); render(); });
+              row.append(cb, document.createTextNode(v.value), delX);
+              list.appendChild(row);
+            });
+            body.appendChild(list);
+          }
+
+          if (groups.length > 1) {
+            const delGroupBtn = document.createElement("button");
+            delGroupBtn.type = "button";
+            delGroupBtn.className = "small";
+            delGroupBtn.textContent = "이 그룹 삭제";
+            delGroupBtn.addEventListener("click", () => {
+              groupsMap.set(key, groups.filter((x) => x !== g));
+              render();
+            });
+            body.appendChild(delGroupBtn);
+          }
+
+          gEl.appendChild(body);
+        }
+        wrap.appendChild(gEl);
+      });
+
+      const addGroupBtn = document.createElement("button");
+      addGroupBtn.type = "button";
+      addGroupBtn.className = "small";
+      addGroupBtn.textContent = "+ 옵션 그룹 추가 (예: 윗그릇)";
+      addGroupBtn.addEventListener("click", () => {
+        ensureOptionGroups(groupsMap, key).push({ name: "", items: [], open: true });
+        render();
+      });
+      wrap.appendChild(addGroupBtn);
+    };
+    render();
+    return wrap;
   }
 
   async function saveInventoryItem(itemId, fields) {
