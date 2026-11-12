@@ -385,8 +385,7 @@ app.get("/api/naver/status", (_req, res) => {
 
 app.get("/api/naver/products/search", async (req, res) => {
   if (!isNaverConfigured()) return res.status(501).json({ error: "이 서버엔 스마트스토어 연동이 설정되어 있지 않아요." });
-  const q = String(req.query.q || "").trim();
-  if (!q) return res.status(400).json({ error: "검색어를 입력해주세요." });
+  const q = String(req.query.q || "").trim(); // 비어있으면 전체 목록(판매중 상품)을 그대로 돌려줌
   try {
     const rows = await searchProducts(q);
     res.json({ rows });
