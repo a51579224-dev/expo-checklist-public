@@ -138,22 +138,50 @@
   .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .inv-naver-actions button { width: auto; margin: 0; }
   .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; background: #fff; }
+  .inv-card.inv-dragging { opacity: .6; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
   .inv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .inv-card-head .txt { flex: 1; font-size: 16px; font-weight: 700; cursor: text; }
   .inv-card-head .txt.done { text-decoration: line-through; color: var(--muted); }
   .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 32px; margin: 0; flex-shrink: 0; }
+  .inv-drag-handle {
+    flex-shrink: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: var(--muted); border: 1px solid var(--border); border-radius: 8px;
+    cursor: grab; touch-action: none; background: #fff;
+  }
+  .inv-drag-handle:active { cursor: grabbing; background: var(--accent-light); }
   .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   .inv-qty-row .qlbl { font-size: 13px; color: var(--muted); flex-shrink: 0; width: 44px; }
   .inv-qty-row input[type="number"] {
     width: 68px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text);
   }
   .inv-qty-row .unit { font-size: 13px; color: var(--muted); }
-  .inv-total-pc { font-size: 13px; color: var(--accent-dark); margin-left: 4px; font-weight: 700; }
+  .inv-total-pc { font-size: 14px; color: var(--accent-dark); font-weight: 700; margin-top: 2px; }
   .inv-diff { font-size: 13px; color: #c23b2e; margin-left: 6px; font-weight: 700; }
-  .inv-checks { display: flex; gap: 14px; margin: 8px 0; }
-  .inv-checks label { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; margin: 0; cursor: pointer; }
-  .inv-checks input[type="checkbox"] { width: auto; margin: 0; }
+
+  /* 준비 예정: 1 CTN = N PCS / 박스 수량 → 자동계산 / 추가 PC */
+  .inv-plan-wrap { margin-bottom: 8px; }
+  .inv-plan-wrap .qlbl { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .inv-boxcap-row, .inv-ctn-row, .inv-extra-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .inv-boxcap-row .unit, .inv-extra-row .unit { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+  .inv-boxcap-input { width: 64px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text); }
+  .inv-subtotal-pc { font-size: 13px; color: var(--muted); }
+  .num-stepper { display: inline-flex; align-items: center; gap: 4px; }
+  .num-stepper-btn {
+    width: 36px; height: 36px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; font-size: 20px; line-height: 1; padding: 0; margin: 0; color: var(--text);
+  }
+  .num-stepper-input { width: 56px; text-align: center; padding: 7px 4px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text); }
+
+  /* 준비완료 / 차량적재완료 — 카드에서 제일 크고 누르기 쉬운 버튼 */
+  .inv-checks { display: flex; gap: 10px; margin: 12px 0; }
+  .inv-check-btn {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 56px; border: 2px solid var(--border); border-radius: 14px; background: #fff;
+    font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; user-select: none; margin: 0;
+  }
+  .inv-check-btn input[type="checkbox"] { width: 22px; height: 22px; margin: 0; flex-shrink: 0; }
+  .inv-check-btn.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
   .inv-note { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
   .inv-empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
 
@@ -657,7 +685,10 @@
       return;
     }
 
-    visibleItems.forEach((it) => container.appendChild(buildInventoryCard(it)));
+    // 필터가 걸려있으면(화면에 전체 품목이 안 보이는 상태) 드래그 순서 변경은 꺼둠 —
+    // 서버 reorder API가 전체 품목 id 배열을 요구해서, 필터링된 일부만으로는 순서가 꼬일 수 있음.
+    const draggable = !invFilter.onlyUnprepared && !invFilter.onlyUnloaded;
+    visibleItems.forEach((it) => container.appendChild(buildInventoryCard(it, { draggable })));
   }
 
   // 스마트스토어 어드민에서 내려받은 상품 목록 CSV를 올리면, 판매중인 상품이 쫙 나오고
@@ -876,13 +907,22 @@
     return out;
   }
 
-  function buildInventoryCard(it) {
+  function buildInventoryCard(it, opts = {}) {
     const card = document.createElement("div");
     card.className = "inv-card";
+    card.dataset.itemId = it.id;
 
-    // 품목명 + 삭제
+    // 품목명 + 드래그 손잡이 + 삭제
     const head = document.createElement("div");
     head.className = "inv-card-head";
+    if (opts.draggable) {
+      const handle = document.createElement("div");
+      handle.className = "inv-drag-handle";
+      handle.textContent = "⠿";
+      handle.title = "드래그해서 순서 변경";
+      setupCardDrag(card, handle);
+      head.appendChild(handle);
+    }
     const textEl = document.createElement("span");
     textEl.className = "txt" + (it.done ? " done" : "");
     textEl.textContent = it.text;
@@ -896,30 +936,53 @@
 
     const saveField = (field, value) => saveInventoryItem(it.id, { [field]: value });
 
-    // 준비 예정 수량 (CTN / PC) + 박스입수
-    const planRow = document.createElement("div");
-    planRow.className = "inv-qty-row";
-    planRow.innerHTML = `<span class="qlbl">예정</span>`;
-    const ctnPlannedInput = numInput(it.ctnPlanned, "CTN");
-    const pcPlannedInput = numInput(it.pcPlanned, "PC");
-    const boxQtyInput = numInput(it.boxQty, "박스당 PC(선택)");
-    boxQtyInput.style.width = "90px";
-    ctnPlannedInput.addEventListener("change", () => { saveField("ctnPlanned", ctnPlannedInput.value); });
-    pcPlannedInput.addEventListener("change", () => { saveField("pcPlanned", pcPlannedInput.value); });
-    boxQtyInput.addEventListener("change", () => { saveField("boxQty", boxQtyInput.value); });
+    // 준비 예정 수량: ①박스 하나당 PCS ②박스(CTN) 수량 → 자동계산 ③추가 PC(낱개)
+    const planWrap = document.createElement("div");
+    planWrap.className = "inv-plan-wrap";
+    planWrap.innerHTML = `<span class="qlbl">예정</span>`;
+
+    const boxCapRow = document.createElement("div");
+    boxCapRow.className = "inv-boxcap-row";
+    const boxQtyInput = numInput(it.boxQty, "20");
+    boxQtyInput.classList.add("inv-boxcap-input");
+    boxQtyInput.addEventListener("change", () => saveField("boxQty", boxQtyInput.value));
+    boxCapRow.append(span("unit", "1 CTN ="), boxQtyInput, span("unit", "PCS"));
+
+    const ctnRow = document.createElement("div");
+    ctnRow.className = "inv-ctn-row";
+    const ctnWrap = numStepper(it.ctnPlanned, "0");
+    const ctnPlannedInput = ctnWrap.input;
+    ctnPlannedInput.addEventListener("change", () => saveField("ctnPlanned", ctnPlannedInput.value));
+    const subtotalEl = span("inv-subtotal-pc", "");
+    ctnRow.append(ctnWrap, span("unit", "CTN"), subtotalEl);
+
+    const extraRow = document.createElement("div");
+    extraRow.className = "inv-extra-row";
+    const pcWrap = numStepper(it.pcPlanned, "0");
+    const pcPlannedInput = pcWrap.input;
+    pcPlannedInput.addEventListener("change", () => saveField("pcPlanned", pcPlannedInput.value));
+    extraRow.append(span("unit", "추가 PC(낱개)"), pcWrap);
+
     const totalPcEl = span("inv-total-pc", "");
-    const updateTotalPc = () => {
+    const updateCalc = () => {
       const box = Number(boxQtyInput.value) || 0;
-      if (box <= 0) { totalPcEl.style.display = "none"; return; }
       const ctn = Number(ctnPlannedInput.value) || 0;
       const pc = Number(pcPlannedInput.value) || 0;
-      totalPcEl.textContent = `→ 총 ${ctn * box + pc} PC`;
-      totalPcEl.style.display = "";
+      if (box > 0) {
+        subtotalEl.textContent = `= 자동계산 ${ctn * box} PCS`;
+        subtotalEl.style.display = "";
+        totalPcEl.textContent = `→ 총 ${ctn * box + pc} PC`;
+        totalPcEl.style.display = "";
+      } else {
+        subtotalEl.style.display = "none";
+        totalPcEl.style.display = "none";
+      }
     };
-    [ctnPlannedInput, pcPlannedInput, boxQtyInput].forEach((el) => el.addEventListener("input", updateTotalPc));
-    planRow.append(ctnPlannedInput, span("unit", "CTN"), pcPlannedInput, span("unit", "PC"), boxQtyInput, totalPcEl);
-    updateTotalPc();
-    card.appendChild(planRow);
+    [boxQtyInput, ctnPlannedInput, pcPlannedInput].forEach((el) => el.addEventListener("input", updateCalc));
+    updateCalc();
+
+    planWrap.append(boxCapRow, ctnRow, extraRow, totalPcEl);
+    card.appendChild(planWrap);
 
     // 실제 준비 수량 (CTN / PC)
     const actualRow = document.createElement("div");
@@ -937,17 +1000,22 @@
     }
     card.appendChild(actualRow);
 
-    // 준비완료 / 차량적재완료 체크
+    // 준비완료 / 차량적재완료 체크 — 가장 크게, 누르기 쉽게
     const checks = document.createElement("div");
     checks.className = "inv-checks";
     const prepLabel = document.createElement("label");
+    prepLabel.className = "inv-check-btn" + (it.done ? " checked" : "");
     const prepCb = document.createElement("input");
     prepCb.type = "checkbox";
     prepCb.checked = !!it.done;
-    prepCb.addEventListener("change", () => toggleItem("inventory", it.id, prepCb.checked));
+    prepCb.addEventListener("change", () => {
+      prepLabel.classList.toggle("checked", prepCb.checked);
+      toggleItem("inventory", it.id, prepCb.checked);
+    });
     prepLabel.append(prepCb, document.createTextNode("준비완료"));
 
     const loadLabel = document.createElement("label");
+    loadLabel.className = "inv-check-btn" + (it.loaded ? " checked" : "");
     const loadCb = document.createElement("input");
     loadCb.type = "checkbox";
     loadCb.checked = !!it.loaded;
@@ -958,6 +1026,7 @@
           return;
         }
       }
+      loadLabel.classList.toggle("checked", loadCb.checked);
       await saveInventoryItem(it.id, { loaded: loadCb.checked });
     });
     loadLabel.append(loadCb, document.createTextNode("차량적재완료"));
@@ -976,6 +1045,54 @@
     return card;
   }
 
+  // 마우스/터치 공용(Pointer Events) 드래그 순서 변경. 손잡이를 눌러서 드래그하면
+  // 지나치는 카드와 자리를 바로 맞바꾸고, 손을 떼면 바뀐 순서를 서버에 저장함.
+  function setupCardDrag(card, handle) {
+    let dragging = false;
+
+    const onPointerMove = (e) => {
+      if (!dragging) return;
+      const container = card.parentElement;
+      if (!container) return;
+      const cards = [...container.querySelectorAll(":scope > .inv-card")];
+      for (const sib of cards) {
+        if (sib === card) continue;
+        const rect = sib.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        const cardIsAfterSib = !!(sib.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (e.clientY < mid && cardIsAfterSib) { container.insertBefore(card, sib); break; }
+        if (e.clientY >= mid && !cardIsAfterSib) { container.insertBefore(card, sib.nextSibling); break; }
+      }
+    };
+
+    const finishDrag = async (e) => {
+      if (!dragging) return;
+      dragging = false;
+      card.classList.remove("inv-dragging");
+      document.body.style.userSelect = "";
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", finishDrag);
+      document.removeEventListener("pointercancel", finishDrag);
+      const container = card.parentElement;
+      if (!container) return;
+      const ids = [...container.querySelectorAll(":scope > .inv-card")].map((c) => c.dataset.itemId);
+      await fetch(`${API}/${currentSlug}/categories/inventory/reorder`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemIds: ids }),
+      });
+      await refreshDetail();
+    };
+
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      dragging = true;
+      card.classList.add("inv-dragging");
+      document.body.style.userSelect = "none";
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", finishDrag);
+      document.addEventListener("pointercancel", finishDrag);
+    });
+  }
+
   function numInput(value, placeholder) {
     const input = document.createElement("input");
     input.type = "number";
@@ -983,6 +1100,34 @@
     input.placeholder = placeholder;
     if (value !== null && value !== undefined) input.value = value;
     return input;
+  }
+
+  // 숫자 입력 + 양옆 -/+ 버튼(스테퍼). 버튼 눌러서 1씩 조절하거나, 가운데 칸에 직접 타이핑도 가능.
+  // 반환된 div에 .input으로 실제 <input>을 바로 꺼내 쓸 수 있게 붙여둠.
+  function numStepper(value, placeholder) {
+    const wrap = document.createElement("div");
+    wrap.className = "num-stepper";
+    const input = numInput(value, placeholder);
+    input.classList.add("num-stepper-input");
+    const step = (delta) => {
+      const next = Math.max(0, (Number(input.value) || 0) + delta);
+      input.value = next;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const minusBtn = document.createElement("button");
+    minusBtn.type = "button";
+    minusBtn.className = "num-stepper-btn";
+    minusBtn.textContent = "−";
+    minusBtn.addEventListener("click", () => step(-1));
+    const plusBtn = document.createElement("button");
+    plusBtn.type = "button";
+    plusBtn.className = "num-stepper-btn";
+    plusBtn.textContent = "+";
+    plusBtn.addEventListener("click", () => step(1));
+    wrap.append(minusBtn, input, plusBtn);
+    wrap.input = input;
+    return wrap;
   }
 
   function span(className, text) {
