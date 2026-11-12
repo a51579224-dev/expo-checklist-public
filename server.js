@@ -421,7 +421,7 @@ function normalizeQty(v) {
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
   const {
     text, done, loaded, group, qty,
-    ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, note,
+    ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, note, optionLabel,
   } = req.body ?? {};
   try {
     const row = await getEventRow(req.params.slug);
@@ -446,6 +446,7 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
     if (ctnRemaining !== undefined) item.ctnRemaining = normalizeQty(ctnRemaining);
     if (pcRemaining !== undefined) item.pcRemaining = normalizeQty(pcRemaining);
     if (note !== undefined) item.note = String(note).trim();
+    if (optionLabel !== undefined) item.optionLabel = String(optionLabel).trim();
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
     res.json({ item, progress: computeProgress(ev.categories) });
   } catch (err) {

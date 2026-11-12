@@ -150,6 +150,7 @@
     cursor: grab; touch-action: none; background: #fff;
   }
   .inv-drag-handle:active { cursor: grabbing; background: var(--accent-light); }
+  .inv-option-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; margin-bottom: 8px; background: #fffdf8; }
   .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   .inv-qty-row .qlbl { font-size: 13px; color: var(--muted); flex-shrink: 0; width: 44px; }
   .inv-qty-row input[type="number"] {
@@ -935,6 +936,15 @@
     card.appendChild(head);
 
     const saveField = (field, value) => saveInventoryItem(it.id, { [field]: value });
+
+    // 옵션(색상/사이즈 등) — 한 상품에 옵션이 여러 개면 이 품목이 어떤 옵션인지 적어두는 칸
+    const optionInput = document.createElement("input");
+    optionInput.type = "text";
+    optionInput.className = "inv-option-input";
+    optionInput.placeholder = "옵션 (예: 레드, M사이즈) — 선택";
+    optionInput.value = it.optionLabel || "";
+    optionInput.addEventListener("change", () => saveField("optionLabel", optionInput.value));
+    card.appendChild(optionInput);
 
     // 준비 예정 수량: ①박스 하나당 PCS ②박스(CTN) 수량 → 자동계산 ③추가 PC(낱개)
     const planWrap = document.createElement("div");
