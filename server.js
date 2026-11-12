@@ -301,12 +301,12 @@ app.delete("/api/events/:slug/floor-plan", async (req, res) => {
 
 // 차량 입차 가능 시간 등록/수정
 app.put("/api/events/:slug/vehicle-access", async (req, res) => {
-  const { date, startTime, endTime } = req.body ?? {};
+  const { date, startTime, endTime, displayDeadline } = req.body ?? {};
   if (!date || !endTime) return res.status(400).json({ error: "반입 날짜와 입차 마감 시간은 필수예요." });
   try {
     const row = await getEventRow(req.params.slug);
     if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
-    const vehicleAccess = { date, startTime: startTime || "", endTime };
+    const vehicleAccess = { date, startTime: startTime || "", endTime, displayDeadline: displayDeadline || "" };
     const { rows } = await pool.query(
       "update events set vehicle_access = $2::jsonb, updated_at = now() where slug = $1 returning *",
       [req.params.slug, JSON.stringify(vehicleAccess)]

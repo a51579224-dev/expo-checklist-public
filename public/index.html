@@ -109,6 +109,10 @@
     display: inline-block; background: var(--accent-light); color: var(--accent-dark); font-weight: 700;
     font-size: 13px; padding: 7px 12px; border-radius: 999px; margin-top: 8px;
   }
+  .va-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .va-stat { background: var(--accent-light); border-radius: 12px; padding: 12px 4px; text-align: center; }
+  .va-stat .num { font-size: 24px; font-weight: 900; color: var(--accent-dark); display: block; line-height: 1.15; }
+  .va-stat .lbl { font-size: 12px; color: var(--muted); font-weight: 600; }
 
   /* 상품 재고: 요약 카드(대시보드 스타일 — 숫자가 한눈에 들어오게) + 품목 카드 */
   .inv-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
@@ -523,9 +527,10 @@
 
     const vSummary = document.getElementById("dt-vehicle-summary");
     const va = ev.vehicleAccess;
+    vSummary.innerHTML = "";
     if (va && va.date && va.endTime) {
-      const timeText = va.startTime ? `${va.startTime}~${va.endTime}` : `${va.endTime} 까지`;
-      vSummary.innerHTML = `<span class="vehicle-badge">🚚 차량 입차 — ${fmtDot(va.date)} ${timeText}</span>`;
+      vSummary.innerHTML = `<span class="vehicle-badge">🚚 차량 입차일 — ${fmtDot(va.date)}</span>`;
+      vSummary.appendChild(buildVehicleStats(va));
       vSummary.style.display = "block";
     } else {
       vSummary.style.display = "none";
@@ -1743,28 +1748,51 @@
       <div class="contract-section-title">③ 차량 입차 가능 시간</div>
       <label>차량 반입 날짜 *</label>
       <input type="date" id="cp-va-date" value="${escapeHtml(va.date || "")}" />
-      <label>입차 가능 시작 시간 (선택)</label>
+      <label>입차 시간 (선택)</label>
       <input type="time" id="cp-va-start" value="${escapeHtml(va.startTime || "")}" />
       <label>입차 마감 시간 *</label>
       <input type="time" id="cp-va-end" value="${escapeHtml(va.endTime || "")}" />
+      <label>진열 마감 시간 (선택)</label>
+      <input type="time" id="cp-va-display" value="${escapeHtml(va.displayDeadline || "")}" />
       <button class="small" id="cp-va-save" style="margin-top:8px">저장</button>
       <div class="error" id="cp-va-error"></div>
+      <div id="cp-va-stats"></div>
     `;
     container.appendChild(sec3);
+    if (va.date && va.endTime) sec3.querySelector("#cp-va-stats").appendChild(buildVehicleStats(va));
     sec3.querySelector("#cp-va-save").addEventListener("click", async () => {
       const date = sec3.querySelector("#cp-va-date").value;
       const startTime = sec3.querySelector("#cp-va-start").value;
       const endTime = sec3.querySelector("#cp-va-end").value;
+      const displayDeadline = sec3.querySelector("#cp-va-display").value;
       const errEl = sec3.querySelector("#cp-va-error");
       if (!date || !endTime) { errEl.textContent = "반입 날짜와 입차 마감 시간은 필수예요."; return; }
       errEl.textContent = "";
       const res = await fetch(`${API}/${currentSlug}/vehicle-access`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, startTime, endTime }),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, startTime, endTime, displayDeadline }),
       });
       const data = await res.json();
       if (!res.ok) { errEl.textContent = "❌ " + (data.error || "저장 실패"); return; }
       await refreshDetail();
     });
+  }
+
+  // 차량 입차/입차마감/진열마감 3개를 큰 숫자 타일로 보여줌 — 값 없는 항목은 "미정"
+  function buildVehicleStats(va) {
+    const wrap = document.createElement("div");
+    wrap.className = "va-stats";
+    const tiles = [
+      ["입차", va.startTime],
+      ["입차 마감", va.endTime],
+      ["진열 마감", va.displayDeadline],
+    ];
+    tiles.forEach(([label, time]) => {
+      const tile = document.createElement("div");
+      tile.className = "va-stat";
+      tile.innerHTML = `<span class="num">${escapeHtml(time || "미정")}</span><span class="lbl">${escapeHtml(label)}</span>`;
+      wrap.appendChild(tile);
+    });
+    return wrap;
   }
 
   function floorPlanImageSrc(fp) {
