@@ -159,7 +159,7 @@
   .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .inv-naver-actions button { width: auto; margin: 0; }
   .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 10px; background: #fff; }
+  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: #fff; }
   .inv-card.inv-dragging { opacity: .6; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
   .inv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .inv-card-head .txt { flex: 1; font-size: 16px; font-weight: 700; cursor: text; }
@@ -175,28 +175,25 @@
   .inv-split-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 13px; font-weight: 700; padding: 0; margin: 0 0 8px; text-align: left; }
   .inv-split-panel { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #fffdf8; }
   .inv-split-panel .inv-optgroup-wrap { margin-bottom: 10px; }
-  .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-  .inv-qty-row .qlbl { font-size: 13px; color: var(--muted); flex-shrink: 0; width: 44px; }
-  .inv-qty-row input[type="number"] {
-    width: 68px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text);
+  .inv-qty-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .inv-qty-row .qlbl { font-size: 15px; font-weight: 700; color: var(--text); flex-shrink: 0; width: 50px; }
+  .inv-qty-row .unit { font-size: 17px; font-weight: 700; color: var(--text); }
+  .inv-total-pc { font-size: 16px; color: var(--accent-dark); font-weight: 800; margin-top: 4px; }
+  .inv-diff { font-size: 14px; color: #c23b2e; margin-left: 6px; font-weight: 700; }
+
+  /* 숫자 입력칸 공통(예정/실제 CTN·PC·박스당PCS) — 손가락으로 누르고 바로 타이핑하기 쉽게 큼직하게 */
+  .inv-qty-input {
+    width: 100px; padding: 12px 8px; border: 2px solid var(--border); border-radius: 12px;
+    font-size: 28px; font-weight: 900; font-family: inherit; color: var(--text); text-align: center;
   }
-  .inv-qty-row .unit { font-size: 13px; color: var(--muted); }
-  .inv-total-pc { font-size: 14px; color: var(--accent-dark); font-weight: 700; margin-top: 2px; }
-  .inv-diff { font-size: 13px; color: #c23b2e; margin-left: 6px; font-weight: 700; }
 
   /* 준비 예정: 1 CTN = N PCS / 박스 수량 → 자동계산 / 추가 PC */
-  .inv-plan-wrap { margin-bottom: 8px; }
-  .inv-plan-wrap .qlbl { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
-  .inv-boxcap-row, .inv-ctn-row, .inv-extra-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-  .inv-boxcap-row .unit, .inv-extra-row .unit { font-size: 13px; color: var(--muted); flex-shrink: 0; }
-  .inv-boxcap-input { width: 64px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text); }
-  .inv-subtotal-pc { font-size: 13px; color: var(--muted); }
-  .num-stepper { display: inline-flex; align-items: center; gap: 4px; }
-  .num-stepper-btn {
-    width: 36px; height: 36px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px;
-    background: #fff; font-size: 20px; line-height: 1; padding: 0; margin: 0; color: var(--text);
-  }
-  .num-stepper-input { width: 56px; text-align: center; padding: 7px 4px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; font-weight: 700; font-family: inherit; color: var(--text); }
+  .inv-plan-wrap { margin-bottom: 10px; }
+  .inv-plan-wrap .qlbl { font-size: 15px; font-weight: 700; color: var(--text); display: block; margin-bottom: 6px; }
+  .inv-boxcap-row, .inv-ctn-row, .inv-extra-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .inv-boxcap-row .unit, .inv-extra-row .unit, .inv-ctn-row .unit { font-size: 17px; font-weight: 700; color: var(--text); flex-shrink: 0; }
+  .inv-subtotal-pc { font-size: 15px; color: var(--muted); font-weight: 700; }
+  .inv-actual-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 13px; font-weight: 700; padding: 0; margin: 0 0 8px; text-align: left; }
 
   /* 준비완료 / 차량적재완료 — 카드에서 제일 크고 누르기 쉬운 버튼 */
   .inv-checks { display: flex; gap: 10px; margin: 12px 0; }
@@ -368,6 +365,7 @@
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
   const cardOptionGroups = new Map(); // 품목 id -> 옵션 나누기용 그룹 배열(카드 다시 그려도 입력 중이던 내용 유지)
   const cardOptionOpen = new Set(); // "옵션 나누기" 패널을 펼쳐둔 품목 id들
+  const cardActualOverride = new Map(); // 품목 id -> "실제 준비 수량" 패널을 수동으로 열었는지/닫았는지
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -1009,24 +1007,24 @@
     const boxCapRow = document.createElement("div");
     boxCapRow.className = "inv-boxcap-row";
     const boxQtyInput = numInput(it.boxQty, "20");
-    boxQtyInput.classList.add("inv-boxcap-input");
+    boxQtyInput.classList.add("inv-qty-input");
     boxQtyInput.addEventListener("change", () => saveField("boxQty", boxQtyInput.value));
     boxCapRow.append(span("unit", "1 CTN ="), boxQtyInput, span("unit", "PCS"));
 
     const ctnRow = document.createElement("div");
     ctnRow.className = "inv-ctn-row";
-    const ctnWrap = numStepper(it.ctnPlanned, "0");
-    const ctnPlannedInput = ctnWrap.input;
+    const ctnPlannedInput = numInput(it.ctnPlanned, "0");
+    ctnPlannedInput.classList.add("inv-qty-input");
     ctnPlannedInput.addEventListener("change", () => saveField("ctnPlanned", ctnPlannedInput.value));
     const subtotalEl = span("inv-subtotal-pc", "");
-    ctnRow.append(ctnWrap, span("unit", "CTN"), subtotalEl);
+    ctnRow.append(ctnPlannedInput, span("unit", "CTN"), subtotalEl);
 
     const extraRow = document.createElement("div");
     extraRow.className = "inv-extra-row";
-    const pcWrap = numStepper(it.pcPlanned, "0");
-    const pcPlannedInput = pcWrap.input;
+    const pcPlannedInput = numInput(it.pcPlanned, "0");
+    pcPlannedInput.classList.add("inv-qty-input");
     pcPlannedInput.addEventListener("change", () => saveField("pcPlanned", pcPlannedInput.value));
-    extraRow.append(span("unit", "추가 PC(낱개)"), pcWrap);
+    extraRow.append(span("unit", "추가 PC(낱개)"), pcPlannedInput);
 
     const totalPcEl = span("inv-total-pc", "");
     const updateCalc = () => {
@@ -1049,12 +1047,32 @@
     planWrap.append(boxCapRow, ctnRow, extraRow, totalPcEl);
     card.appendChild(planWrap);
 
-    // 실제 준비 수량 (CTN / PC)
+    // 실제 준비 수량 (CTN / PC) — 카드를 짧게 유지하려고 기본은 접어두고,
+    // 이미 입력된 값이 있으면(예전에 썼으면) 펼친 채로 보여줌.
+    const hasActualValue = it.ctnActual != null || it.pcActual != null;
+    let actualOpen = cardActualOverride.has(it.id) ? cardActualOverride.get(it.id) : hasActualValue;
+    const actualToggle = document.createElement("button");
+    actualToggle.type = "button";
+    actualToggle.className = "inv-actual-toggle";
     const actualRow = document.createElement("div");
     actualRow.className = "inv-qty-row";
+    const syncActualOpen = () => {
+      actualToggle.textContent = (actualOpen ? "▲ " : "▼ ") + "실제 준비 수량 입력";
+      actualRow.style.display = actualOpen ? "" : "none";
+    };
+    syncActualOpen();
+    actualToggle.addEventListener("click", () => {
+      actualOpen = !actualOpen;
+      cardActualOverride.set(it.id, actualOpen);
+      syncActualOpen();
+    });
+    card.appendChild(actualToggle);
+
     actualRow.innerHTML = `<span class="qlbl">실제</span>`;
     const ctnActualInput = numInput(it.ctnActual, "CTN");
+    ctnActualInput.classList.add("inv-qty-input");
     const pcActualInput = numInput(it.pcActual, "PC");
+    pcActualInput.classList.add("inv-qty-input");
     ctnActualInput.addEventListener("change", () => { saveField("ctnActual", ctnActualInput.value); });
     pcActualInput.addEventListener("change", () => { saveField("pcActual", pcActualInput.value); });
     actualRow.append(ctnActualInput, span("unit", "CTN"), pcActualInput, span("unit", "PC"));
@@ -1169,32 +1187,6 @@
 
   // 숫자 입력 + 양옆 -/+ 버튼(스테퍼). 버튼 눌러서 1씩 조절하거나, 가운데 칸에 직접 타이핑도 가능.
   // 반환된 div에 .input으로 실제 <input>을 바로 꺼내 쓸 수 있게 붙여둠.
-  function numStepper(value, placeholder) {
-    const wrap = document.createElement("div");
-    wrap.className = "num-stepper";
-    const input = numInput(value, placeholder);
-    input.classList.add("num-stepper-input");
-    const step = (delta) => {
-      const next = Math.max(0, (Number(input.value) || 0) + delta);
-      input.value = next;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    };
-    const minusBtn = document.createElement("button");
-    minusBtn.type = "button";
-    minusBtn.className = "num-stepper-btn";
-    minusBtn.textContent = "−";
-    minusBtn.addEventListener("click", () => step(-1));
-    const plusBtn = document.createElement("button");
-    plusBtn.type = "button";
-    plusBtn.className = "num-stepper-btn";
-    plusBtn.textContent = "+";
-    plusBtn.addEventListener("click", () => step(1));
-    wrap.append(minusBtn, input, plusBtn);
-    wrap.input = input;
-    return wrap;
-  }
-
   function span(className, text) {
     const el = document.createElement("span");
     el.className = className;
