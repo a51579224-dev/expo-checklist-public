@@ -126,6 +126,7 @@
   .inv-naver-search { display: flex; gap: 8px; margin-bottom: 10px; }
   .inv-naver-search input { flex: 1; background: #fff; }
   .inv-naver-search button { width: auto; margin: 0; white-space: nowrap; }
+  .inv-naver-selectall { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 6px; cursor: pointer; }
   .inv-naver-results { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 10px; }
   .inv-naver-result-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); background: #fff; }
   .inv-naver-result-row:last-child { border-bottom: none; }
@@ -676,20 +677,41 @@
     filterInput.style.display = "none";
     fileRow.append(fileInput, filterInput);
 
+    const selectAllLabel = document.createElement("label");
+    selectAllLabel.className = "inv-naver-selectall";
+    selectAllLabel.style.display = "none";
+    const selectAllCb = document.createElement("input");
+    selectAllCb.type = "checkbox";
+    selectAllLabel.append(selectAllCb, document.createTextNode(" 전체 선택"));
+
     const resultsEl = document.createElement("div");
     resultsEl.className = "inv-naver-results";
     resultsEl.innerHTML = `<div class="hint">CSV 파일을 선택해주세요.</div>`;
 
     let allRows = [];
+    let rowEls = []; // { key, cb } — 체크박스 하나 토글할 때 목록 전체를 다시 그리지 않고(스크롤 유지) 전체선택 상태만 갱신하려고 기억해둠
     const checked = new Set(); // key: naverProductId
     const rowKey = (r) => r.naverProductId;
+    const visibleRows = () => {
+      const q = filterInput.value.trim().toLowerCase();
+      return !q ? allRows : allRows.filter((r) => r.name.toLowerCase().includes(q));
+    };
+
+    const updateSelectAllState = () => {
+      const rows = visibleRows();
+      selectAllLabel.style.display = rows.length ? "" : "none";
+      const checkedCount = rows.filter((r) => checked.has(rowKey(r))).length;
+      selectAllCb.checked = rows.length > 0 && checkedCount === rows.length;
+      selectAllCb.indeterminate = checkedCount > 0 && checkedCount < rows.length;
+    };
 
     const renderList = () => {
-      const q = filterInput.value.trim().toLowerCase();
-      const rows = !q ? allRows : allRows.filter((r) => r.name.toLowerCase().includes(q));
+      const rows = visibleRows();
+      rowEls = [];
       resultsEl.innerHTML = "";
       if (rows.length === 0) {
-        resultsEl.innerHTML = `<div class="hint">${q ? "찾는 상품이 없어요." : "판매중인 상품이 없어요."}</div>`;
+        resultsEl.innerHTML = `<div class="hint">${filterInput.value.trim() ? "찾는 상품이 없어요." : "판매중인 상품이 없어요."}</div>`;
+        updateSelectAllState();
         return;
       }
       rows.forEach((r) => {
@@ -699,7 +721,7 @@
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.checked = checked.has(key);
-        cb.addEventListener("change", () => { if (cb.checked) checked.add(key); else checked.delete(key); });
+        cb.addEventListener("change", () => { if (cb.checked) checked.add(key); else checked.delete(key); updateSelectAllState(); });
         const info = document.createElement("span");
         info.className = "info";
         info.textContent = r.name;
@@ -708,9 +730,19 @@
         price.textContent = r.price ? `${Number(r.price).toLocaleString()}원` : "";
         row.append(cb, info, price);
         resultsEl.appendChild(row);
+        rowEls.push({ key, cb });
       });
+      updateSelectAllState();
     };
     filterInput.addEventListener("input", renderList);
+    selectAllCb.addEventListener("change", () => {
+      const want = selectAllCb.checked;
+      rowEls.forEach(({ key, cb }) => {
+        if (want) checked.add(key); else checked.delete(key);
+        cb.checked = want;
+      });
+      updateSelectAllState();
+    });
 
     fileInput.addEventListener("change", async () => {
       const file = fileInput.files[0];
@@ -752,7 +784,7 @@
     });
     actions.appendChild(addBtn);
 
-    box.append(fileRow, resultsEl, actions);
+    box.append(fileRow, selectAllLabel, resultsEl, actions);
     return box;
   }
 
@@ -839,11 +871,18 @@
     ctnPlannedInput.addEventListener("change", () => { saveField("ctnPlanned", ctnPlannedInput.value); });
     pcPlannedInput.addEventListener("change", () => { saveField("pcPlanned", pcPlannedInput.value); });
     boxQtyInput.addEventListener("change", () => { saveField("boxQty", boxQtyInput.value); });
-    planRow.append(ctnPlannedInput, span("unit", "CTN"), pcPlannedInput, span("unit", "PC"), boxQtyInput, span("unit", "= 박스당 PC"));
-    if (it.boxQty) {
-      const totalPc = (it.ctnPlanned || 0) * it.boxQty + (it.pcPlanned || 0);
-      planRow.appendChild(span("inv-total-pc", `→ 총 ${totalPc} PC`));
-    }
+    const totalPcEl = span("inv-total-pc", "");
+    const updateTotalPc = () => {
+      const box = Number(boxQtyInput.value) || 0;
+      if (box <= 0) { totalPcEl.style.display = "none"; return; }
+      const ctn = Number(ctnPlannedInput.value) || 0;
+      const pc = Number(pcPlannedInput.value) || 0;
+      totalPcEl.textContent = `→ 총 ${ctn * box + pc} PC`;
+      totalPcEl.style.display = "";
+    };
+    [ctnPlannedInput, pcPlannedInput, boxQtyInput].forEach((el) => el.addEventListener("input", updateTotalPc));
+    planRow.append(ctnPlannedInput, span("unit", "CTN"), pcPlannedInput, span("unit", "PC"), boxQtyInput, totalPcEl);
+    updateTotalPc();
     card.appendChild(planRow);
 
     // 실제 준비 수량 (CTN / PC)
