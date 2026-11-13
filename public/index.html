@@ -159,50 +159,51 @@
   .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .inv-naver-actions button { width: auto; margin: 0; }
   .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: #fff; }
+  .inv-cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+  .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-bottom: 0; background: #fff; min-width: 0; }
   .inv-card.inv-dragging { opacity: .6; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
-  .inv-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .inv-card-head .txt { flex: 1; font-size: 16px; font-weight: 700; cursor: text; }
+  .inv-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .inv-card-head .txt { flex: 1; font-size: 14px; font-weight: 700; cursor: text; word-break: break-word; }
   .inv-card-head .txt.done { text-decoration: line-through; color: var(--muted); }
-  .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 32px; margin: 0; flex-shrink: 0; }
+  .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 8px; height: 26px; margin: 0; flex-shrink: 0; font-size: 12px; }
   .inv-drag-handle {
-    flex-shrink: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-    font-size: 20px; color: var(--muted); border: 1px solid var(--border); border-radius: 8px;
+    flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--muted); border: 1px solid var(--border); border-radius: 7px;
     cursor: grab; touch-action: none; background: #fff;
   }
   .inv-drag-handle:active { cursor: grabbing; background: var(--accent-light); }
-  .inv-option-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; margin-bottom: 8px; background: #fffdf8; }
-  .inv-split-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 13px; font-weight: 700; padding: 0; margin: 0 0 8px; text-align: left; }
-  .inv-split-panel { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; background: #fffdf8; }
-  .inv-split-panel .inv-optgroup-wrap { margin-bottom: 10px; }
-  .inv-qty-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-  .inv-qty-row .qlbl { font-size: 15px; font-weight: 700; color: var(--text); flex-shrink: 0; width: 50px; }
-  .inv-qty-row .unit { font-size: 17px; font-weight: 700; color: var(--text); }
-  .inv-total-pc { font-size: 16px; color: var(--accent-dark); font-weight: 800; margin-top: 4px; }
-  .inv-diff { font-size: 14px; color: #c23b2e; margin-left: 6px; font-weight: 700; }
+  .inv-option-input { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; font-family: inherit; margin-bottom: 6px; background: #fffdf8; box-sizing: border-box; }
+  .inv-split-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 12px; font-weight: 700; padding: 0; margin: 0 0 6px; text-align: left; }
+  .inv-split-panel { border: 1px dashed var(--border); border-radius: 10px; padding: 8px; margin-bottom: 8px; background: #fffdf8; }
+  .inv-split-panel .inv-optgroup-wrap { margin-bottom: 8px; }
+  .inv-qty-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .inv-qty-row .qlbl { font-size: 13px; font-weight: 700; color: var(--text); flex-shrink: 0; width: 40px; }
+  .inv-qty-row .unit { font-size: 14px; font-weight: 700; color: var(--text); }
+  .inv-total-pc { font-size: 14px; color: var(--accent-dark); font-weight: 800; margin-top: 4px; }
+  .inv-diff { font-size: 12px; color: #c23b2e; margin-left: 4px; font-weight: 700; }
 
-  /* 숫자 입력칸 공통(예정/실제 CTN·PC·박스당PCS) — 손가락으로 누르고 바로 타이핑하기 쉽게 큼직하게 */
+  /* 숫자 입력칸 공통(예정/실제 CTN·PC·박스당PCS) — 손가락으로 누르고 바로 타이핑하기 쉽게 큼직하게, 2열에서도 안 깨지게 */
   .inv-qty-input {
-    width: 100px; padding: 12px 8px; border: 2px solid var(--border); border-radius: 12px;
-    font-size: 28px; font-weight: 900; font-family: inherit; color: var(--text); text-align: center;
+    width: 72px; max-width: 32%; padding: 8px 4px; border: 2px solid var(--border); border-radius: 10px;
+    font-size: 20px; font-weight: 900; font-family: inherit; color: var(--text); text-align: center; box-sizing: border-box;
   }
 
   /* 준비 예정: 1 CTN = N PCS / 박스 수량 → 자동계산 / 추가 PC */
-  .inv-plan-wrap { margin-bottom: 10px; }
-  .inv-plan-wrap .qlbl { font-size: 15px; font-weight: 700; color: var(--text); display: block; margin-bottom: 6px; }
-  .inv-boxcap-row, .inv-ctn-row, .inv-extra-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  .inv-boxcap-row .unit, .inv-extra-row .unit, .inv-ctn-row .unit { font-size: 17px; font-weight: 700; color: var(--text); flex-shrink: 0; }
-  .inv-subtotal-pc { font-size: 15px; color: var(--muted); font-weight: 700; }
-  .inv-actual-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 13px; font-weight: 700; padding: 0; margin: 0 0 8px; text-align: left; }
+  .inv-plan-wrap { margin-bottom: 8px; }
+  .inv-plan-wrap .qlbl { font-size: 13px; font-weight: 700; color: var(--text); display: block; margin-bottom: 4px; }
+  .inv-boxcap-row, .inv-ctn-row, .inv-extra-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .inv-boxcap-row .unit, .inv-extra-row .unit, .inv-ctn-row .unit { font-size: 14px; font-weight: 700; color: var(--text); flex-shrink: 0; }
+  .inv-subtotal-pc { font-size: 13px; color: var(--muted); font-weight: 700; }
+  .inv-actual-toggle { width: auto; background: none; border: none; color: var(--accent-dark); font-size: 12px; font-weight: 700; padding: 0; margin: 0 0 6px; text-align: left; }
 
   /* 준비완료 / 차량적재완료 — 카드에서 제일 크고 누르기 쉬운 버튼 */
-  .inv-checks { display: flex; gap: 10px; margin: 12px 0; }
+  .inv-checks { display: flex; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
   .inv-check-btn {
-    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-    min-height: 56px; border: 2px solid var(--border); border-radius: 14px; background: #fff;
-    font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; user-select: none; margin: 0;
+    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;
+    min-height: 44px; border: 2px solid var(--border); border-radius: 12px; background: #fff;
+    font-size: 12px; font-weight: 700; color: var(--text); cursor: pointer; user-select: none; margin: 0; padding: 4px;
   }
-  .inv-check-btn input[type="checkbox"] { width: 22px; height: 22px; margin: 0; flex-shrink: 0; }
+  .inv-check-btn input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
   .inv-check-btn.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
   .inv-note { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
   .inv-empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
@@ -725,7 +726,10 @@
     // 필터가 걸려있으면(화면에 전체 품목이 안 보이는 상태) 드래그 순서 변경은 꺼둠 —
     // 서버 reorder API가 전체 품목 id 배열을 요구해서, 필터링된 일부만으로는 순서가 꼬일 수 있음.
     const draggable = !invFilter.onlyUnprepared && !invFilter.onlyUnloaded;
-    visibleItems.forEach((it) => container.appendChild(buildInventoryCard(it, { draggable })));
+    const grid = document.createElement("div");
+    grid.className = "inv-cards-grid";
+    visibleItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable })));
+    container.appendChild(grid);
   }
 
   // 스마트스토어 어드민에서 내려받은 상품 목록 CSV를 올리면, 판매중인 상품이 쫙 나오고
