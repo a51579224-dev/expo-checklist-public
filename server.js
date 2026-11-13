@@ -149,6 +149,7 @@ function cloneCategories(categories) {
       ...(it.pcActual !== undefined ? { pcActual: null } : {}),
       ...(it.ctnRemaining !== undefined ? { ctnRemaining: null } : {}),
       ...(it.pcRemaining !== undefined ? { pcRemaining: null } : {}),
+      ...(it.soldPc !== undefined ? { soldPc: null } : {}),
       ...(it.note !== undefined ? { note: "" } : {}),
     })),
   }));
@@ -504,7 +505,7 @@ function normalizeQty(v) {
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
   const {
     text, done, loaded, group, qty,
-    ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, note, optionLabel,
+    ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, soldPc, note, optionLabel,
   } = req.body ?? {};
   try {
     const row = await getEventRow(req.params.slug);
@@ -528,6 +529,7 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
     if (pcActual !== undefined) item.pcActual = normalizeQty(pcActual);
     if (ctnRemaining !== undefined) item.ctnRemaining = normalizeQty(ctnRemaining);
     if (pcRemaining !== undefined) item.pcRemaining = normalizeQty(pcRemaining);
+    if (soldPc !== undefined) item.soldPc = normalizeQty(soldPc);
     if (note !== undefined) item.note = String(note).trim();
     if (optionLabel !== undefined) item.optionLabel = String(optionLabel).trim();
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);

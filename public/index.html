@@ -159,6 +159,19 @@
   .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .inv-naver-actions button { width: auto; margin: 0; }
   .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  /* 상품 재고 / 남은 재고 공용: 4종류 대시보드 타일 + 뒤로가기 */
+  .cat-dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+  .cat-dash-tile {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    background: var(--accent-light); border: none; border-radius: 16px; padding: 18px 8px; margin: 0;
+    cursor: pointer; text-align: center;
+  }
+  .cat-dash-icon { font-size: 30px; }
+  .cat-dash-name { font-size: 16px; font-weight: 800; color: var(--text); }
+  .cat-dash-count { font-size: 12px; color: var(--accent-dark); font-weight: 600; }
+  .cat-back-btn { display: block; width: auto; margin: 0 0 12px; }
+  .cat-drilled-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
+
   .inv-bulk-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--accent-light); border-radius: 10px; padding: 10px; margin-bottom: 14px; }
   .inv-bulk-bar .inv-bulk-label { font-size: 13px; font-weight: 700; color: var(--accent-dark); flex-shrink: 0; }
   .inv-bulk-bar input { flex: 1; min-width: 120px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff; }
@@ -395,6 +408,8 @@
   let currentCatId = "contract";
   let lastAnimatedCatId = null;
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
+  let invStockCategoryView = null; // null이면 대시보드(4종류 타일), 아니면 그 종류만 보여줌
+  let remainingStockCategoryView = null; // 남은 재고 탭도 동일한 방식
   const cardOptionGroups = new Map(); // 품목 id -> 옵션 나누기용 그룹 배열(카드 다시 그려도 입력 중이던 내용 유지)
   const cardOptionOpen = new Set(); // "옵션 나누기" 패널을 펼쳐둔 품목 id들
   const cardActualOverride = new Map(); // 품목 id -> "실제 준비 수량" 패널을 수동으로 열었는지/닫았는지
@@ -778,13 +793,6 @@
     syncBulkBar();
     container.appendChild(bulkBar);
 
-    // 필터 적용
-    const visibleItems = items.filter((it) => {
-      if (invFilter.onlyUnprepared && it.done) return false;
-      if (invFilter.onlyUnloaded && it.loaded) return false;
-      return true;
-    });
-
     if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "inv-empty";
@@ -792,6 +800,28 @@
       container.appendChild(empty);
       return;
     }
+
+    // 쿠션/스크래쳐/식기/장난감 4종류 대시보드 — 종류를 고르기 전엔 타일만 보여주고,
+    // 고르면 그 종류 품목만 걸러서 보여줌(철수 정산 탭 "남은 재고"도 같은 방식).
+    if (invStockCategoryView === null) {
+      container.appendChild(buildCategoryDashboard(items, (cat) => { invStockCategoryView = cat; renderDetail(); }));
+      return;
+    }
+    container.appendChild(buildCategoryBackBtn(() => { invStockCategoryView = null; renderDetail(); }));
+    const titleEl = document.createElement("div");
+    titleEl.className = "cat-drilled-title";
+    titleEl.textContent = `${PRODUCT_CATEGORY_ICONS[invStockCategoryView] || "📦"} ${invStockCategoryView}`;
+    container.appendChild(titleEl);
+
+    // 필터 적용(종류 + 미준비/미적재)
+    const visibleItems = items.filter((it) => {
+      const [namePart] = splitItemText(it.text);
+      if (guessProductCategory(namePart) !== invStockCategoryView) return false;
+      if (invFilter.onlyUnprepared && it.done) return false;
+      if (invFilter.onlyUnloaded && it.loaded) return false;
+      return true;
+    });
+
     if (visibleItems.length === 0) {
       const empty = document.createElement("div");
       empty.className = "inv-empty";
@@ -800,12 +830,11 @@
       return;
     }
 
-    // 필터가 걸려있으면(화면에 전체 품목이 안 보이는 상태) 드래그 순서 변경은 꺼둠 —
-    // 서버 reorder API가 전체 품목 id 배열을 요구해서, 필터링된 일부만으로는 순서가 꼬일 수 있음.
-    const draggable = !invFilter.onlyUnprepared && !invFilter.onlyUnloaded;
+    // 종류별로 걸러서 보여주는 중이라(전체 목록이 아님) 드래그 순서 변경은 꺼둠 —
+    // 서버 reorder API가 전체 품목 id 배열을 요구해서, 일부만으로는 순서가 꼬일 수 있음.
     const grid = document.createElement("div");
     grid.className = "inv-cards-grid";
-    visibleItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable, onSelectChange: syncBulkBar })));
+    visibleItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable: false, onSelectChange: syncBulkBar })));
     container.appendChild(grid);
   }
 
@@ -1022,6 +1051,56 @@
     const vLower = v.toLowerCase();
     if (OPTION_COLOR_WORDS.some((w) => vLower.includes(w))) return "🎨";
     return "🏷️";
+  }
+
+  // 제품명 키워드로 4대 종류(식기/스크래쳐/쿠션/장난감)를 자동 분류. 겹치는 키워드가 있으면
+  // 더 구체적인 쪽(식기/스크래쳐/쿠션)을 "장난감"보다 먼저 판단함.
+  const PRODUCT_CATEGORIES = ["식기", "스크래쳐", "쿠션", "장난감"];
+  const PRODUCT_CATEGORY_ICONS = { "식기": "🍽️", "스크래쳐": "🪵", "쿠션": "🛋️", "장난감": "🧶", "기타": "📦" };
+  function guessProductCategory(name) {
+    const n = name || "";
+    for (const cat of PRODUCT_CATEGORIES) {
+      if (n.includes(cat)) return cat;
+    }
+    return "기타";
+  }
+
+  // 상품 재고/남은 재고 공용 — 품목들을 4종류(+기타)로 묶어 대시보드 타일로 보여주고,
+  // 타일을 누르면 onSelect(종류)가 호출됨(각 화면에서 그 종류만 걸러서 다시 그림).
+  function buildCategoryDashboard(items, onSelect) {
+    const wrap = document.createElement("div");
+    wrap.className = "cat-dash-grid";
+    const cats = [...PRODUCT_CATEGORIES, "기타"];
+    const groups = new Map(cats.map((c) => [c, []]));
+    items.forEach((it) => {
+      const [namePart] = splitItemText(it.text);
+      groups.get(guessProductCategory(namePart)).push(it);
+    });
+    cats.forEach((cat) => {
+      const list = groups.get(cat);
+      if (list.length === 0) return;
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "cat-dash-tile";
+      const doneCount = list.filter((it) => it.done).length;
+      tile.innerHTML = `
+        <span class="cat-dash-icon">${PRODUCT_CATEGORY_ICONS[cat] || "📦"}</span>
+        <span class="cat-dash-name">${cat}</span>
+        <span class="cat-dash-count">${list.length}개 품목${doneCount ? ` · ${doneCount}개 준비됨` : ""}</span>
+      `;
+      tile.addEventListener("click", () => onSelect(cat));
+      wrap.appendChild(tile);
+    });
+    return wrap;
+  }
+
+  function buildCategoryBackBtn(onBack) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "small secondary cat-back-btn";
+    btn.textContent = "← 종류 다시 선택";
+    btn.addEventListener("click", onBack);
+    return btn;
   }
 
   // 품목명 또는 옵션명 중 한쪽만 바꿔서 "제품명 - 옵션명" 형태를 유지한 채 저장.
@@ -1630,6 +1709,14 @@
     renderImprovementNotesSection(container, ev);
   }
 
+  // 가져간 CTN/PC를 "1CTN=boxQty PCS" 기준으로 낱개 총수량 하나로 환산(박스당 수량 미입력이면 CTN은 못 더함).
+  function takenTotalPc(it) {
+    const takenCtn = it.ctnActual ?? it.ctnPlanned ?? null;
+    const takenPc = it.pcActual ?? it.pcPlanned ?? null;
+    if (takenCtn === null && takenPc === null) return null;
+    return (takenCtn || 0) * (it.boxQty || 0) + (takenPc || 0);
+  }
+
   function renderRemainingStockSection(container, ev) {
     const sec = document.createElement("div");
     sec.className = "settle-section";
@@ -1647,15 +1734,23 @@
       return;
     }
 
-    items.forEach((it) => {
+    if (remainingStockCategoryView === null) {
+      sec.appendChild(buildCategoryDashboard(items, (cat) => { remainingStockCategoryView = cat; renderDetail(); }));
+      container.appendChild(sec);
+      return;
+    }
+    sec.appendChild(buildCategoryBackBtn(() => { remainingStockCategoryView = null; renderDetail(); }));
+    const titleEl = document.createElement("div");
+    titleEl.className = "cat-drilled-title";
+    titleEl.textContent = `${PRODUCT_CATEGORY_ICONS[remainingStockCategoryView] || "📦"} ${remainingStockCategoryView}`;
+    sec.appendChild(titleEl);
+
+    const catItems = items.filter((it) => guessProductCategory(splitItemText(it.text)[0]) === remainingStockCategoryView);
+    catItems.forEach((it) => {
       const row = document.createElement("div");
       row.className = "settle-row";
 
-      const takenCtn = it.ctnActual ?? it.ctnPlanned ?? null;
-      const takenPc = it.pcActual ?? it.pcPlanned ?? null;
-      const takenText = (takenCtn !== null || takenPc !== null)
-        ? `가져간 수량: ${takenCtn ?? 0} CTN / ${takenPc ?? 0} PC`
-        : "가져간 수량: 미입력";
+      const taken = takenTotalPc(it);
 
       const nameEl = document.createElement("span");
       nameEl.className = "name";
@@ -1663,29 +1758,22 @@
 
       const takenEl = document.createElement("span");
       takenEl.className = "taken";
-      takenEl.textContent = takenText;
+      takenEl.textContent = taken === null ? "가져간 수량 미입력" : `가져간 ${taken}개`;
 
-      const ctnInput = numInput(it.ctnRemaining, "CTN");
-      const pcInput = numInput(it.pcRemaining, "PC");
-
-      const save = async () => {
+      const soldInput = numInput(it.soldPc, "0");
+      soldInput.addEventListener("change", async () => {
         await fetch(`${API}/${currentSlug}/categories/inventory/items/${it.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ctnRemaining: ctnInput.value, pcRemaining: pcInput.value }),
+          body: JSON.stringify({ soldPc: soldInput.value }),
         });
         await refreshDetail();
-      };
-      ctnInput.addEventListener("change", save);
-      pcInput.addEventListener("change", save);
+      });
 
-      row.append(nameEl, takenEl, ctnInput, span("unit", "CTN"), pcInput, span("unit", "PC"));
+      row.append(nameEl, takenEl, span("unit", "판매"), soldInput, span("unit", "개"));
 
-      const hasRemaining = it.ctnRemaining !== null && it.ctnRemaining !== undefined
-        || it.pcRemaining !== null && it.pcRemaining !== undefined;
-      if (hasRemaining && (takenCtn !== null || takenPc !== null)) {
-        const soldCtn = (takenCtn || 0) - (it.ctnRemaining || 0);
-        const soldPc = (takenPc || 0) - (it.pcRemaining || 0);
-        row.appendChild(span("sold-est", `→ 판매 추정: CTN ${soldCtn} / PC ${soldPc}`));
+      if (it.soldPc !== null && it.soldPc !== undefined && taken !== null) {
+        const remain = taken - it.soldPc;
+        row.appendChild(span("sold-est", `→ 남은 수량: ${remain}개`));
       }
       sec.appendChild(row);
     });
