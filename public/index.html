@@ -269,12 +269,12 @@
   .sup-sub-add-row input[type="number"] { width: 48px; flex-shrink: 0; padding: 6px 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; text-align: center; }
   .sup-sub-add-row button { width: auto; flex-shrink: 0; margin: 0; font-size: 12px; padding: 6px 10px; }
 
-  /* 챙겼는지 한눈에: 클릭 한 번으로 O(챙김)/X(미챙김) 토글 */
+  /* 챙겼는지 한눈에: 항상 O만 표시하고, 누르면 회색 ↔ 파란색으로 색만 바뀜 */
   .sup-ox-btn {
     width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; border: 2px solid var(--border);
     background: #fff; color: var(--muted); font-size: 18px; font-weight: 900; cursor: pointer; margin: 0; padding: 0;
   }
-  .sup-ox-btn.done { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sup-ox-btn.done { background: #2563eb; border-color: #2563eb; color: #fff; }
 
   /* 수량 선택 + O/X는 한 묶음 — 좁은 화면에서 줄바꿈돼도 둘이 같이 다음 줄로 내려감 */
   .sup-right-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
@@ -1666,7 +1666,7 @@
     const oxBtn = document.createElement("button");
     oxBtn.type = "button";
     oxBtn.className = "sup-ox-btn" + (it.done ? " done" : "");
-    oxBtn.textContent = it.done ? "O" : "X";
+    oxBtn.textContent = "O";
     oxBtn.title = it.done ? "챙김 — 눌러서 취소" : "안 챙김 — 눌러서 챙김 표시";
     oxBtn.addEventListener("click", () => toggleItem("supplies", it.id, !it.done));
 
