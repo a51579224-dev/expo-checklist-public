@@ -159,15 +159,20 @@
   .inv-naver-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .inv-naver-actions button { width: auto; margin: 0; }
   .inv-naver-hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .inv-bulk-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--accent-light); border-radius: 10px; padding: 10px; margin-bottom: 14px; }
+  .inv-bulk-bar .inv-bulk-label { font-size: 13px; font-weight: 700; color: var(--accent-dark); flex-shrink: 0; }
+  .inv-bulk-bar input { flex: 1; min-width: 120px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: #fff; }
+  .inv-bulk-bar button { width: auto; margin: 0; font-size: 13px; padding: 8px 12px; white-space: nowrap; }
   .inv-cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
   .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-bottom: 0; background: #fff; min-width: 0; }
   .inv-card.inv-dragging { opacity: .6; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
-  .inv-card-head { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
-  .inv-title-block { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
-  .inv-prod-name { font-size: 14px; font-weight: 700; cursor: text; word-break: break-word; }
+  .inv-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .inv-title-block { flex: 1 1 100%; order: 5; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .inv-prod-name { font-size: 14px; font-weight: 700; color: var(--text); cursor: text; word-break: break-word; }
   .inv-prod-name.done { text-decoration: line-through; color: var(--muted); }
-  .inv-opt-name { font-size: 13px; font-weight: 700; color: var(--accent-dark); cursor: text; word-break: break-word; }
-  .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 8px; height: 26px; margin: 0; flex-shrink: 0; font-size: 12px; }
+  .inv-title-block.has-option .inv-prod-name { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .inv-opt-name { font-size: 18px; font-weight: 900; color: var(--accent-dark); cursor: text; word-break: break-word; }
+  .inv-select-cb { flex-shrink: 0; margin: 2px 0 0; }
   .inv-drag-handle {
     flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
     font-size: 16px; color: var(--muted); border: 1px solid var(--border); border-radius: 7px;
@@ -393,6 +398,7 @@
   const cardOptionGroups = new Map(); // 품목 id -> 옵션 나누기용 그룹 배열(카드 다시 그려도 입력 중이던 내용 유지)
   const cardOptionOpen = new Set(); // "옵션 나누기" 패널을 펼쳐둔 품목 id들
   const cardActualOverride = new Map(); // 품목 id -> "실제 준비 수량" 패널을 수동으로 열었는지/닫았는지
+  const selectedInventoryIds = new Set(); // 상품명 일괄 변경을 위해 체크해둔 품목 id들
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -727,6 +733,51 @@
 
     container.appendChild(buildInventoryCsvBox());
 
+    // 상품명 일괄 변경 바 — 카드에서 체크한 품목이 있을 때만 보임. 옵션명은 그대로 두고
+    // 상품명(" - " 앞부분)만 한번에 바꿔치기함.
+    const bulkBar = document.createElement("div");
+    bulkBar.className = "inv-bulk-bar";
+    const bulkLabel = span("inv-bulk-label", "");
+    const bulkInput = document.createElement("input");
+    bulkInput.type = "text";
+    bulkInput.placeholder = "새 상품명";
+    const bulkBtn = document.createElement("button");
+    bulkBtn.className = "small";
+    bulkBtn.textContent = "선택한 상품명 일괄 변경";
+    const bulkCancelBtn = document.createElement("button");
+    bulkCancelBtn.className = "small secondary";
+    bulkCancelBtn.textContent = "선택 해제";
+    const syncBulkBar = () => {
+      const n = selectedInventoryIds.size;
+      bulkBar.style.display = n > 0 ? "" : "none";
+      bulkLabel.textContent = `${n}개 선택됨`;
+    };
+    bulkBtn.addEventListener("click", async () => {
+      const newName = bulkInput.value.trim();
+      if (!newName) { alert("새 상품명을 입력해주세요."); return; }
+      const ids = [...selectedInventoryIds];
+      if (!confirm(`선택한 ${ids.length}개 품목의 상품명을 "${newName}"(으)로 한번에 바꿀까요? (옵션명은 그대로 유지돼요)`)) return;
+      for (const id of ids) {
+        const it = items.find((x) => x.id === id);
+        if (!it) continue;
+        const [, optionPart] = splitItemText(it.text);
+        const newText = optionPart ? `${newName} - ${optionPart}` : newName;
+        await fetch(`${API}/${currentSlug}/categories/inventory/items/${id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: newText }),
+        });
+      }
+      selectedInventoryIds.clear();
+      await refreshDetail();
+    });
+    bulkCancelBtn.addEventListener("click", () => {
+      selectedInventoryIds.clear();
+      container.querySelectorAll(".inv-select-cb").forEach((cb) => { cb.checked = false; });
+      syncBulkBar();
+    });
+    bulkBar.append(bulkLabel, bulkInput, bulkBtn, bulkCancelBtn);
+    syncBulkBar();
+    container.appendChild(bulkBar);
+
     // 필터 적용
     const visibleItems = items.filter((it) => {
       if (invFilter.onlyUnprepared && it.done) return false;
@@ -754,7 +805,7 @@
     const draggable = !invFilter.onlyUnprepared && !invFilter.onlyUnloaded;
     const grid = document.createElement("div");
     grid.className = "inv-cards-grid";
-    visibleItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable })));
+    visibleItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable, onSelectChange: syncBulkBar })));
     container.appendChild(grid);
   }
 
@@ -1002,9 +1053,21 @@
     card.className = "inv-card";
     card.dataset.itemId = it.id;
 
-    // 품목명 + 옵션명(2줄, 옵션엔 자동 아이콘) + 드래그 손잡이 + 삭제
+    // 선택(상품명 일괄 변경용) + 품목명 + 옵션명(2줄, 옵션엔 자동 아이콘) + 드래그 손잡이 + 삭제
     const head = document.createElement("div");
     head.className = "inv-card-head";
+
+    const selectCb = document.createElement("input");
+    selectCb.type = "checkbox";
+    selectCb.className = "inv-select-cb";
+    selectCb.title = "선택 — 체크한 품목끼리 상품명 일괄 변경";
+    selectCb.checked = selectedInventoryIds.has(it.id);
+    selectCb.addEventListener("change", () => {
+      if (selectCb.checked) selectedInventoryIds.add(it.id); else selectedInventoryIds.delete(it.id);
+      if (opts.onSelectChange) opts.onSelectChange();
+    });
+    head.appendChild(selectCb);
+
     if (opts.draggable) {
       const handle = document.createElement("div");
       handle.className = "inv-drag-handle";
@@ -1016,7 +1079,7 @@
 
     const [namePart, optionPart] = splitItemText(it.text);
     const titleBlock = document.createElement("div");
-    titleBlock.className = "inv-title-block";
+    titleBlock.className = "inv-title-block" + (optionPart ? " has-option" : "");
 
     const nameEl = document.createElement("span");
     nameEl.className = "inv-prod-name" + (it.done ? " done" : "");
@@ -1034,8 +1097,10 @@
     head.appendChild(titleBlock);
 
     const delBtn = document.createElement("button");
-    delBtn.className = "del";
-    delBtn.textContent = "삭제";
+    delBtn.type = "button";
+    delBtn.className = "sup-del-x";
+    delBtn.textContent = "✕";
+    delBtn.title = "삭제";
     delBtn.addEventListener("click", () => deleteItem("inventory", it.id));
     head.appendChild(delBtn);
     card.appendChild(head);
