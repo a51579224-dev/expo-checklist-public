@@ -140,6 +140,7 @@ function cloneCategories(categories) {
       done: false,
       ...(it.group !== undefined ? { group: it.group } : {}),
       ...(it.category !== undefined ? { category: it.category } : {}),
+      ...(it.subItems !== undefined ? { subItems: it.subItems } : {}),
       ...(it.qty !== undefined ? { qty: it.qty } : {}),
       ...(it.naverProductId !== undefined ? { naverProductId: it.naverProductId, naverOptionId: it.naverOptionId } : {}),
       ...(it.loaded !== undefined ? { loaded: false } : {}),
@@ -507,7 +508,7 @@ function normalizeQty(v) {
 // 항목 수정 — 이름 변경, 완료/적재 체크 토글, '상품 재고'/'집기' 전용 수량·분류·메모 필드(있을 때만 반영)
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
   const {
-    text, done, loaded, group, qty, category,
+    text, done, loaded, group, qty, category, subItems,
     ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, soldPc, note, optionLabel,
   } = req.body ?? {};
   try {
@@ -526,6 +527,13 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
     if (group !== undefined) item.group = String(group).trim();
     if (category !== undefined) item.category = String(category).trim();
     if (qty !== undefined) item.qty = normalizeQty(qty);
+    if (subItems !== undefined) {
+      item.subItems = Array.isArray(subItems)
+        ? subItems
+            .map((s) => ({ id: s.id || newId("sub"), text: String(s.text || "").trim(), qty: normalizeQty(s.qty) }))
+            .filter((s) => s.text)
+        : [];
+    }
     if (ctnPlanned !== undefined) item.ctnPlanned = normalizeQty(ctnPlanned);
     if (pcPlanned !== undefined) item.pcPlanned = normalizeQty(pcPlanned);
     if (boxQty !== undefined) item.boxQty = normalizeQty(boxQty);

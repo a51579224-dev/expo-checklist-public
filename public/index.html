@@ -245,11 +245,29 @@
   .sup-group-head .name { font-weight: 800; font-size: 16px; }
   .sup-group-head .count { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 6px; }
   .sup-group-head button.del-group { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 30px; margin: 0; font-size: 13px; }
-  .sup-item-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .sup-item-row:last-of-type { border-bottom: none; }
+  .sup-item-wrap { border-bottom: 1px solid var(--border); padding: 4px 0; }
+  .sup-item-wrap:last-child { border-bottom: none; }
+  .sup-item-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; flex-wrap: wrap; }
   .sup-item-row .txt { flex: 1; cursor: text; font-size: 15px; min-width: 50px; overflow-wrap: anywhere; }
   .sup-item-row .txt.done { text-decoration: line-through; color: var(--muted); }
   .sup-item-row .unit { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+
+  /* 집기 품목을 세부 항목(하위 폴더)으로 나눠보기: "진열 테이블 3개 / 식사용 테이블 1개" */
+  .sup-subfolder-btn {
+    width: auto; flex-shrink: 0; background: none; border: none; color: var(--muted);
+    font-size: 14px; padding: 0 2px; margin: 0; cursor: pointer; opacity: .5;
+  }
+  .sup-subfolder-btn.has-sub { opacity: 1; }
+  .sup-sub-summary { font-size: 12px; color: var(--muted); padding: 0 0 4px 30px; }
+  .sup-sub-panel { background: #fffdf8; border: 1px dashed var(--border); border-radius: 8px; padding: 8px; margin: 0 0 6px 30px; }
+  .sup-sub-item-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; }
+  .sup-sub-item-row .sub-name { flex: 1; }
+  .sup-sub-item-row .sub-qty { color: var(--muted); font-weight: 700; flex-shrink: 0; }
+  .sup-sub-item-row .sub-del { width: auto; background: none; border: none; color: var(--muted); font-size: 12px; padding: 0 4px; margin: 0; flex-shrink: 0; }
+  .sup-sub-add-row { display: flex; gap: 6px; margin-top: 4px; }
+  .sup-sub-add-row input[type="text"] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .sup-sub-add-row input[type="number"] { width: 48px; flex-shrink: 0; padding: 6px 4px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; text-align: center; }
+  .sup-sub-add-row button { width: auto; flex-shrink: 0; margin: 0; font-size: 12px; padding: 6px 10px; }
 
   /* 챙겼는지 한눈에: 클릭 한 번으로 O(챙김)/X(미챙김) 토글 */
   .sup-ox-btn {
@@ -415,6 +433,7 @@
   const cardOptionOpen = new Set(); // "옵션 나누기" 패널을 펼쳐둔 품목 id들
   const cardActualOverride = new Map(); // 품목 id -> "실제 준비 수량" 패널을 수동으로 열었는지/닫았는지
   const selectedInventoryIds = new Set(); // 상품명 일괄 변경을 위해 체크해둔 품목 id들
+  const supSubOpen = new Set(); // 집기 품목 id -> 하위 세부 항목(폴더) 패널을 펼쳐뒀는지
 
   // 자주 참가하는 박람회 목록 — 여기만 고치면 드롭다운에 반영됨. 목록에 없으면 직접 입력하면 됨(datalist라 자유 입력 가능).
   const EXPO_NAME_OPTIONS = [
@@ -1593,6 +1612,9 @@
   }
 
   function buildSuppliesItemRow(it) {
+    const wrap = document.createElement("div");
+    wrap.className = "sup-item-wrap";
+
     const row = document.createElement("div");
     row.className = "sup-item-row";
 
@@ -1607,6 +1629,20 @@
     textEl.className = "txt" + (it.done ? " done" : "");
     textEl.textContent = it.text;
     textEl.addEventListener("click", () => startEditItem("supplies", it, textEl));
+
+    const subItems = Array.isArray(it.subItems) ? it.subItems : [];
+
+    // 하위폴더 아이콘 — 한 품목의 수량을 "진열 테이블 3개 / 식사용 테이블 1개"처럼
+    // 세부 항목으로 나눠서 볼 수 있게 하는 패널을 펼침/접음.
+    const subBtn = document.createElement("button");
+    subBtn.type = "button";
+    subBtn.className = "sup-subfolder-btn" + (subItems.length > 0 ? " has-sub" : "");
+    subBtn.textContent = "📂";
+    subBtn.title = "세부 항목으로 나누기";
+    subBtn.addEventListener("click", () => {
+      if (supSubOpen.has(it.id)) supSubOpen.delete(it.id); else supSubOpen.add(it.id);
+      renderPanel();
+    });
 
     // 수량: 슬라이더 대신 클릭하면 바로 숫자가 펼쳐지는 선택형(집기는 보통 1~10개 정도라 그 범위 위주)
     const startQty = it.qty !== null && it.qty !== undefined && it.qty !== "" ? Number(it.qty) : 1;
@@ -1640,8 +1676,75 @@
     rightGroup.className = "sup-right-group";
     rightGroup.append(qtySelect, oxBtn);
 
-    row.append(delBtn, textEl, rightGroup);
-    return row;
+    row.append(delBtn, textEl, subBtn, rightGroup);
+    wrap.appendChild(row);
+
+    // 접혀있어도 세부 항목이 있으면 작게 요약 한 줄 보여줌
+    const summaryEl = document.createElement("div");
+    summaryEl.className = "sup-sub-summary";
+    if (subItems.length > 0) {
+      summaryEl.textContent = "ㄴ " + subItems.map((s) => `${s.text} ${s.qty ?? 0}개`).join(" / ");
+    } else {
+      summaryEl.style.display = "none";
+    }
+    wrap.appendChild(summaryEl);
+
+    const panelEl = document.createElement("div");
+    wrap.appendChild(panelEl);
+
+    const saveSubItems = async (next) => {
+      await fetch(`${API}/${currentSlug}/categories/supplies/items/${it.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subItems: next }),
+      });
+      supSubOpen.add(it.id); // 저장 후에도 패널은 열린 채로 유지
+      await refreshDetail();
+    };
+
+    function renderPanel() {
+      panelEl.innerHTML = "";
+      panelEl.className = "sup-sub-panel";
+      if (!supSubOpen.has(it.id)) { panelEl.style.display = "none"; return; }
+      panelEl.style.display = "";
+
+      subItems.forEach((s) => {
+        const sRow = document.createElement("div");
+        sRow.className = "sup-sub-item-row";
+        const sDel = document.createElement("button");
+        sDel.type = "button";
+        sDel.className = "sub-del";
+        sDel.textContent = "✕";
+        sDel.addEventListener("click", () => saveSubItems(subItems.filter((x) => x.id !== s.id)));
+        sRow.append(span("sub-name", s.text), span("sub-qty", `${s.qty ?? 0}개`), sDel);
+        panelEl.appendChild(sRow);
+      });
+
+      const addRow = document.createElement("div");
+      addRow.className = "sup-sub-add-row";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.placeholder = "세부 항목명 (예: 진열 테이블)";
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number";
+      qtyInput.min = "1";
+      qtyInput.placeholder = "수량";
+      const addSubBtn = document.createElement("button");
+      addSubBtn.type = "button";
+      addSubBtn.className = "small";
+      addSubBtn.textContent = "+ 추가";
+      const commit = () => {
+        const name = nameInput.value.trim();
+        if (!name) return;
+        saveSubItems([...subItems, { text: name, qty: qtyInput.value || 1 }]);
+      };
+      addSubBtn.addEventListener("click", commit);
+      nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); });
+      qtyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); });
+      addRow.append(nameInput, qtyInput, addSubBtn);
+      panelEl.appendChild(addRow);
+    }
+    renderPanel();
+
+    return wrap;
   }
 
   function buildSuppliesGroupSection(groupName, items, { deletable = false } = {}) {
