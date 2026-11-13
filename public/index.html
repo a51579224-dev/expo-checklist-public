@@ -124,6 +124,7 @@
   .inv-filters button.secondary.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .inv-add-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .inv-add-row input { flex: 1; min-width: 160px; }
+  .inv-add-row select { flex-shrink: 0; padding: 0 8px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-family: inherit; color: var(--text); background: #fff; }
   .inv-add-row button { width: auto; white-space: nowrap; margin: 0; }
   .inv-naver-btn { background: #03c75a; } /* 네이버 브랜드 녹색 — 버튼만 구분되게, 나머지 테마는 그대로 */
   .inv-clearall-btn { background: #fff; color: #c23b2e; border: 1px solid #c23b2e; }
@@ -712,19 +713,33 @@
     const addInput = document.createElement("input");
     addInput.type = "text";
     addInput.placeholder = "품목명 (예: 메가스크래쳐 84cm 내추럴)";
+    const addCatSelect = document.createElement("select");
+    const autoOpt = document.createElement("option");
+    autoOpt.value = "";
+    autoOpt.textContent = "카테고리: 자동 분류";
+    addCatSelect.appendChild(autoOpt);
+    PRODUCT_CATEGORIES.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      addCatSelect.appendChild(opt);
+    });
+    if (invStockCategoryView) addCatSelect.value = invStockCategoryView;
     const addBtn = document.createElement("button");
     addBtn.className = "small";
     addBtn.textContent = "품목 추가";
     addBtn.addEventListener("click", async () => {
       const text = addInput.value.trim();
       if (!text) return;
+      const category = addCatSelect.value;
       await fetch(`${API}/${currentSlug}/categories/inventory/items`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, ...(category ? { category } : {}) }),
       });
       await refreshDetail();
     });
     addInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addBtn.click(); });
-    addRow.append(addInput, addBtn);
+    addRow.append(addInput, addCatSelect, addBtn);
     const csvBtn = document.createElement("button");
     csvBtn.className = "small inv-naver-btn";
     csvBtn.textContent = "엑셀(CSV)로 상품 불러오기";
@@ -815,8 +830,7 @@
 
     // 필터 적용(종류 + 미준비/미적재)
     const visibleItems = items.filter((it) => {
-      const [namePart] = splitItemText(it.text);
-      if (guessProductCategory(namePart) !== invStockCategoryView) return false;
+      if (itemCategory(it) !== invStockCategoryView) return false;
       if (invFilter.onlyUnprepared && it.done) return false;
       if (invFilter.onlyUnloaded && it.loaded) return false;
       return true;
@@ -1065,6 +1079,14 @@
     return "기타";
   }
 
+  // 품목 추가 시 카테고리를 직접 고른 경우(it.category) 그걸 우선 쓰고, 안 골랐으면
+  // 제품명 키워드로 자동 분류함.
+  function itemCategory(it) {
+    if (it.category && PRODUCT_CATEGORIES.includes(it.category)) return it.category;
+    const [namePart] = splitItemText(it.text);
+    return guessProductCategory(namePart);
+  }
+
   // 상품 재고/남은 재고 공용 — 품목들을 4종류(+기타)로 묶어 대시보드 타일로 보여주고,
   // 타일을 누르면 onSelect(종류)가 호출됨(각 화면에서 그 종류만 걸러서 다시 그림).
   function buildCategoryDashboard(items, onSelect) {
@@ -1073,8 +1095,7 @@
     const cats = [...PRODUCT_CATEGORIES, "기타"];
     const groups = new Map(cats.map((c) => [c, []]));
     items.forEach((it) => {
-      const [namePart] = splitItemText(it.text);
-      groups.get(guessProductCategory(namePart)).push(it);
+      groups.get(itemCategory(it)).push(it);
     });
     cats.forEach((cat) => {
       const list = groups.get(cat);
@@ -1745,7 +1766,7 @@
     titleEl.textContent = `${PRODUCT_CATEGORY_ICONS[remainingStockCategoryView] || "📦"} ${remainingStockCategoryView}`;
     sec.appendChild(titleEl);
 
-    const catItems = items.filter((it) => guessProductCategory(splitItemText(it.text)[0]) === remainingStockCategoryView);
+    const catItems = items.filter((it) => itemCategory(it) === remainingStockCategoryView);
     catItems.forEach((it) => {
       const row = document.createElement("div");
       row.className = "settle-row";

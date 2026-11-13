@@ -139,6 +139,7 @@ function cloneCategories(categories) {
       text: it.text,
       done: false,
       ...(it.group !== undefined ? { group: it.group } : {}),
+      ...(it.category !== undefined ? { category: it.category } : {}),
       ...(it.qty !== undefined ? { qty: it.qty } : {}),
       ...(it.naverProductId !== undefined ? { naverProductId: it.naverProductId, naverOptionId: it.naverOptionId } : {}),
       ...(it.loaded !== undefined ? { loaded: false } : {}),
@@ -404,7 +405,7 @@ app.post("/api/events/:slug/duplicate", async (req, res) => {
 
 // 항목 추가 — '집기'의 경우 group을 같이 보내면 그 분류 소속으로 추가됨
 app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
-  const { text, group } = req.body ?? {};
+  const { text, group, category } = req.body ?? {};
   if (!text || !text.trim()) return res.status(400).json({ error: "항목 내용을 입력해주세요." });
   try {
     const row = await getEventRow(req.params.slug);
@@ -413,6 +414,7 @@ app.post("/api/events/:slug/categories/:catId/items", async (req, res) => {
     const cat = findCategory(ev, req.params.catId);
     const item = { id: newId("item"), text: text.trim(), done: false };
     if (group && group.trim()) item.group = group.trim();
+    if (category && category.trim()) item.category = category.trim();
     cat.items.push(item);
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
     res.json({ item, progress: computeProgress(ev.categories) });
@@ -482,6 +484,7 @@ app.post("/api/events/:slug/categories/:catId/items/:itemId/split-options", asyn
       newItems.push({
         id: newId("item"), text: `${baseName} - ${label}`, done: false,
         naverProductId: base.naverProductId || base.id, naverOptionId: label,
+        ...(base.category ? { category: base.category } : {}),
       });
     });
     if (newItems.length === 0) return res.status(400).json({ error: "전부 이미 있는 옵션이에요." });
@@ -504,7 +507,7 @@ function normalizeQty(v) {
 // 항목 수정 — 이름 변경, 완료/적재 체크 토글, '상품 재고'/'집기' 전용 수량·분류·메모 필드(있을 때만 반영)
 app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) => {
   const {
-    text, done, loaded, group, qty,
+    text, done, loaded, group, qty, category,
     ctnPlanned, pcPlanned, boxQty, ctnActual, pcActual, ctnRemaining, pcRemaining, soldPc, note, optionLabel,
   } = req.body ?? {};
   try {
@@ -521,6 +524,7 @@ app.put("/api/events/:slug/categories/:catId/items/:itemId", async (req, res) =>
     if (done !== undefined) item.done = !!done;
     if (loaded !== undefined) item.loaded = !!loaded;
     if (group !== undefined) item.group = String(group).trim();
+    if (category !== undefined) item.category = String(category).trim();
     if (qty !== undefined) item.qty = normalizeQty(qty);
     if (ctnPlanned !== undefined) item.ctnPlanned = normalizeQty(ctnPlanned);
     if (pcPlanned !== undefined) item.pcPlanned = normalizeQty(pcPlanned);
