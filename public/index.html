@@ -162,9 +162,11 @@
   .inv-cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
   .inv-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-bottom: 0; background: #fff; min-width: 0; }
   .inv-card.inv-dragging { opacity: .6; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
-  .inv-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-  .inv-card-head .txt { flex: 1; font-size: 14px; font-weight: 700; cursor: text; word-break: break-word; }
-  .inv-card-head .txt.done { text-decoration: line-through; color: var(--muted); }
+  .inv-card-head { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
+  .inv-title-block { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 2px; }
+  .inv-prod-name { font-size: 14px; font-weight: 700; cursor: text; word-break: break-word; }
+  .inv-prod-name.done { text-decoration: line-through; color: var(--muted); }
+  .inv-opt-name { font-size: 13px; font-weight: 700; color: var(--accent-dark); cursor: text; word-break: break-word; }
   .inv-card-head button.del { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 8px; height: 26px; margin: 0; flex-shrink: 0; font-size: 12px; }
   .inv-drag-handle {
     flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
@@ -214,7 +216,6 @@
   }
   .inv-check-btn input[type="checkbox"] { width: 18px; height: 18px; margin: 0; flex-shrink: 0; }
   .inv-check-btn.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .inv-note { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
   .inv-empty { color: var(--muted); font-size: 14px; text-align: center; padding: 20px 0; }
 
   /* 집기: 분류(그룹)별로 묶어서 보기 */
@@ -227,7 +228,7 @@
   .sup-group-head button.del-group { width: auto; background: #fff; color: var(--text); border: 1px solid var(--border); padding: 0 10px; height: 30px; margin: 0; font-size: 13px; }
   .sup-item-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .sup-item-row:last-of-type { border-bottom: none; }
-  .sup-item-row .txt { flex: 1; cursor: text; font-size: 15px; min-width: 60px; }
+  .sup-item-row .txt { flex: 1; cursor: text; font-size: 15px; min-width: 50px; overflow-wrap: anywhere; }
   .sup-item-row .txt.done { text-decoration: line-through; color: var(--muted); }
   .sup-item-row .unit { font-size: 13px; color: var(--muted); flex-shrink: 0; }
 
@@ -238,10 +239,12 @@
   }
   .sup-ox-btn.done { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-  /* 수량: 직접 타이핑 대신 슬라이더(1~100)로 선택 */
-  .sup-qty-wrap { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 70px; }
-  .sup-qty-slider { flex: 1; min-width: 44px; accent-color: var(--accent); }
-  .sup-qty-val { font-size: 13px; font-weight: 800; color: var(--text); min-width: 36px; text-align: right; flex-shrink: 0; }
+  /* 수량 선택 + O/X는 한 묶음 — 좁은 화면에서 줄바꿈돼도 둘이 같이 다음 줄로 내려감 */
+  .sup-right-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
+  .sup-qty-select {
+    width: 60px; flex-shrink: 0; padding: 7px 2px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-weight: 800; font-family: inherit; color: var(--text); text-align: center; background: #fff;
+  }
 
   /* 삭제: 전부 X 아이콘으로 */
   .sup-del-x {
@@ -949,12 +952,57 @@
     return out;
   }
 
+  // 품목 텍스트는 "제품명 - 옵션명" 규칙으로 저장됨(옵션별로 나누기에서 생성). 화면엔 2줄로 나눠 보여줌.
+  const splitItemText = (text) => {
+    const idx = text.indexOf(" - ");
+    if (idx === -1) return [text, null];
+    return [text.slice(0, idx), text.slice(idx + 3)];
+  };
+
+  const OPTION_COLOR_WORDS = [
+    "레드", "빨강", "블루", "파랑", "네이비", "핑크", "블랙", "검정", "화이트", "흰색",
+    "그레이", "회색", "옐로우", "노랑", "그린", "초록", "브라운", "갈색", "베이지",
+    "퍼플", "보라", "오렌지", "주황", "민트", "카키", "아이보리", "골드", "실버", "와인", "코랄",
+  ];
+  function guessOptionIcon(value) {
+    const v = (value || "").trim();
+    if (!v) return "🏷️";
+    if (/^(xxs|xs|s|m|l|xl|xxl|xxxl|free|대|중|소)$/i.test(v) || /cm|mm|사이즈|inch/i.test(v)) return "📏";
+    const vLower = v.toLowerCase();
+    if (OPTION_COLOR_WORDS.some((w) => vLower.includes(w))) return "🎨";
+    return "🏷️";
+  }
+
+  // 품목명 또는 옵션명 중 한쪽만 바꿔서 "제품명 - 옵션명" 형태를 유지한 채 저장.
+  function startEditTextPart(catId, item, el, isOption) {
+    const [namePart, optionPart] = splitItemText(item.text);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = isOption ? (optionPart || "") : namePart;
+    input.style.flex = "1";
+    const finish = async () => {
+      const v = input.value.trim();
+      const newText = isOption ? (v ? `${namePart} - ${v}` : namePart) : (optionPart ? `${v} - ${optionPart}` : v);
+      if (newText && newText !== item.text) {
+        await fetch(`${API}/${currentSlug}/categories/${catId}/items/${item.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: newText }),
+        });
+      }
+      await refreshDetail();
+    };
+    input.addEventListener("blur", finish);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
   function buildInventoryCard(it, opts = {}) {
     const card = document.createElement("div");
     card.className = "inv-card";
     card.dataset.itemId = it.id;
 
-    // 품목명 + 드래그 손잡이 + 삭제
+    // 품목명 + 옵션명(2줄, 옵션엔 자동 아이콘) + 드래그 손잡이 + 삭제
     const head = document.createElement("div");
     head.className = "inv-card-head";
     if (opts.draggable) {
@@ -965,57 +1013,76 @@
       setupCardDrag(card, handle);
       head.appendChild(handle);
     }
-    const textEl = document.createElement("span");
-    textEl.className = "txt" + (it.done ? " done" : "");
-    textEl.textContent = it.text;
-    textEl.addEventListener("click", () => startEditItem("inventory", it, textEl));
+
+    const [namePart, optionPart] = splitItemText(it.text);
+    const titleBlock = document.createElement("div");
+    titleBlock.className = "inv-title-block";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "inv-prod-name" + (it.done ? " done" : "");
+    nameEl.textContent = namePart;
+    nameEl.addEventListener("click", () => startEditTextPart("inventory", it, nameEl, false));
+    titleBlock.appendChild(nameEl);
+
+    if (optionPart) {
+      const optEl = document.createElement("span");
+      optEl.className = "inv-opt-name";
+      optEl.textContent = `${guessOptionIcon(optionPart)} ${optionPart}`;
+      optEl.addEventListener("click", () => startEditTextPart("inventory", it, optEl, true));
+      titleBlock.appendChild(optEl);
+    }
+    head.appendChild(titleBlock);
+
     const delBtn = document.createElement("button");
     delBtn.className = "del";
     delBtn.textContent = "삭제";
     delBtn.addEventListener("click", () => deleteItem("inventory", it.id));
-    head.append(textEl, delBtn);
+    head.appendChild(delBtn);
     card.appendChild(head);
 
     const saveField = (field, value) => saveInventoryItem(it.id, { [field]: value });
 
-    // 옵션별로 나누기 — 이 품목 하나를 "밑식기/윗그릇" 같은 옵션 그룹×값 조합별로
-    // 여러 품목으로 쪼갬(네이버 상품페이지 옵션 선택 방식과 비슷하게).
-    const splitToggle = document.createElement("button");
-    splitToggle.type = "button";
-    splitToggle.className = "inv-split-toggle";
-    const setToggleLabel = () => { splitToggle.textContent = (cardOptionOpen.has(it.id) ? "▲ " : "▼ ") + "옵션별로 나누기"; };
-    setToggleLabel();
-    const panel = document.createElement("div");
-    panel.className = "inv-split-panel";
-    panel.style.display = cardOptionOpen.has(it.id) ? "" : "none";
-    splitToggle.addEventListener("click", () => {
-      if (cardOptionOpen.has(it.id)) cardOptionOpen.delete(it.id); else cardOptionOpen.add(it.id);
+    // 옵션별로 나누기 — 아직 옵션으로 안 나뉜 품목에서만 보여줌(네이버 상품페이지 옵션
+    // 선택 방식처럼 그룹×값 조합으로 여러 품목으로 쪼갬). 한번 나누고 나면 품목마다 이미
+    // 옵션 하나씩이라 다시 나눌 필요가 없으니, 그 뒤엔 옵션명을 텍스트로 바로 수정하면 됨.
+    if (!optionPart) {
+      const splitToggle = document.createElement("button");
+      splitToggle.type = "button";
+      splitToggle.className = "inv-split-toggle";
+      const setToggleLabel = () => { splitToggle.textContent = (cardOptionOpen.has(it.id) ? "▲ " : "▼ ") + "옵션별로 나누기"; };
       setToggleLabel();
+      const panel = document.createElement("div");
+      panel.className = "inv-split-panel";
       panel.style.display = cardOptionOpen.has(it.id) ? "" : "none";
-    });
-    card.appendChild(splitToggle);
-
-    panel.appendChild(buildOptionGroupsUI(cardOptionGroups, it.id));
-    const applyBtn = document.createElement("button");
-    applyBtn.type = "button";
-    applyBtn.className = "small";
-    applyBtn.textContent = "이 조합들로 품목 나누기";
-    applyBtn.addEventListener("click", async () => {
-      const combos = cartesianOptionCombos(cardOptionGroups.get(it.id) || []);
-      if (combos.length === 0) { alert("체크한 옵션 값이 없어요."); return; }
-      if (!confirm(`이 품목을 ${combos.length}개 옵션으로 나눌까요? (원래 품목은 없어지고 각 옵션별 품목으로 바뀌어요)`)) return;
-      const res = await fetch(`${API}/${currentSlug}/categories/inventory/items/${it.id}/split-options`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ combos }),
+      splitToggle.addEventListener("click", () => {
+        if (cardOptionOpen.has(it.id)) cardOptionOpen.delete(it.id); else cardOptionOpen.add(it.id);
+        setToggleLabel();
+        panel.style.display = cardOptionOpen.has(it.id) ? "" : "none";
       });
-      const body = await res.json();
-      if (!res.ok) { alert(body.error || "나누기에 실패했어요."); return; }
-      cardOptionGroups.delete(it.id);
-      cardOptionOpen.delete(it.id);
-      if (body.skipped > 0) alert(`${body.added}개 생성, ${body.skipped}개는 이미 있어서 건너뛰었어요.`);
-      await refreshDetail();
-    });
-    panel.appendChild(applyBtn);
-    card.appendChild(panel);
+      card.appendChild(splitToggle);
+
+      panel.appendChild(buildOptionGroupsUI(cardOptionGroups, it.id));
+      const applyBtn = document.createElement("button");
+      applyBtn.type = "button";
+      applyBtn.className = "small";
+      applyBtn.textContent = "이 조합들로 품목 나누기";
+      applyBtn.addEventListener("click", async () => {
+        const combos = cartesianOptionCombos(cardOptionGroups.get(it.id) || []);
+        if (combos.length === 0) { alert("체크한 옵션 값이 없어요."); return; }
+        if (!confirm(`이 품목을 ${combos.length}개 옵션으로 나눌까요? (원래 품목은 없어지고 각 옵션별 품목으로 바뀌어요)`)) return;
+        const res = await fetch(`${API}/${currentSlug}/categories/inventory/items/${it.id}/split-options`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ combos }),
+        });
+        const body = await res.json();
+        if (!res.ok) { alert(body.error || "나누기에 실패했어요."); return; }
+        cardOptionGroups.delete(it.id);
+        cardOptionOpen.delete(it.id);
+        if (body.skipped > 0) alert(`${body.added}개 생성, ${body.skipped}개는 이미 있어서 건너뛰었어요.`);
+        await refreshDetail();
+      });
+      panel.appendChild(applyBtn);
+      card.appendChild(panel);
+    }
 
     // 준비 예정 수량: ①박스 하나당 PCS + ②박스(CTN) 수량을 한 줄에 작게, 그 아래 전체 수량
     // 자동계산을 카드에서 제일 크게, ③추가 PC(낱개)는 작게 따로 표기.
@@ -1125,15 +1192,6 @@
     loadLabel.append(loadCb, document.createTextNode("차량적재완료"));
     checks.append(prepLabel, loadLabel);
     card.appendChild(checks);
-
-    // 메모 (부분 적재 등)
-    const noteInput = document.createElement("input");
-    noteInput.type = "text";
-    noteInput.className = "inv-note";
-    noteInput.placeholder = "메모 (예: 2박스만 우선 적재, 나머지는 당일 추가)";
-    noteInput.value = it.note || "";
-    noteInput.addEventListener("change", () => saveField("note", noteInput.value));
-    card.appendChild(noteInput);
 
     return card;
   }
@@ -1373,37 +1431,6 @@
     const row = document.createElement("div");
     row.className = "sup-item-row";
 
-    const oxBtn = document.createElement("button");
-    oxBtn.type = "button";
-    oxBtn.className = "sup-ox-btn" + (it.done ? " done" : "");
-    oxBtn.textContent = it.done ? "O" : "X";
-    oxBtn.title = it.done ? "챙김 — 눌러서 취소" : "안 챙김 — 눌러서 챙김 표시";
-    oxBtn.addEventListener("click", () => toggleItem("supplies", it.id, !it.done));
-
-    const textEl = document.createElement("span");
-    textEl.className = "txt" + (it.done ? " done" : "");
-    textEl.textContent = it.text;
-    textEl.addEventListener("click", () => startEditItem("supplies", it, textEl));
-
-    const qtyWrap = document.createElement("div");
-    qtyWrap.className = "sup-qty-wrap";
-    const startQty = it.qty !== null && it.qty !== undefined && it.qty !== "" ? Number(it.qty) : 1;
-    const qtySlider = document.createElement("input");
-    qtySlider.type = "range";
-    qtySlider.min = "1";
-    qtySlider.max = "100";
-    qtySlider.value = Math.min(100, Math.max(1, startQty || 1));
-    qtySlider.className = "sup-qty-slider";
-    const qtyVal = span("sup-qty-val", `${qtySlider.value}개`);
-    qtySlider.addEventListener("input", () => { qtyVal.textContent = `${qtySlider.value}개`; });
-    qtySlider.addEventListener("change", async () => {
-      await fetch(`${API}/${currentSlug}/categories/supplies/items/${it.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qty: qtySlider.value }),
-      });
-      await refreshDetail();
-    });
-    qtyWrap.append(qtySlider, qtyVal);
-
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "sup-del-x";
@@ -1411,7 +1438,44 @@
     delBtn.title = "삭제";
     delBtn.addEventListener("click", () => deleteItem("supplies", it.id));
 
-    row.append(oxBtn, textEl, qtyWrap, delBtn);
+    const textEl = document.createElement("span");
+    textEl.className = "txt" + (it.done ? " done" : "");
+    textEl.textContent = it.text;
+    textEl.addEventListener("click", () => startEditItem("supplies", it, textEl));
+
+    // 수량: 슬라이더 대신 클릭하면 바로 숫자가 펼쳐지는 선택형(집기는 보통 1~10개 정도라 그 범위 위주)
+    const startQty = it.qty !== null && it.qty !== undefined && it.qty !== "" ? Number(it.qty) : 1;
+    const qtySelect = document.createElement("select");
+    qtySelect.className = "sup-qty-select";
+    const maxOpt = Math.max(10, Math.min(100, startQty || 1));
+    for (let n = 1; n <= maxOpt; n++) {
+      const opt = document.createElement("option");
+      opt.value = String(n);
+      opt.textContent = `${n}개`;
+      qtySelect.appendChild(opt);
+    }
+    qtySelect.value = String(Math.min(100, Math.max(1, startQty || 1)));
+    qtySelect.addEventListener("change", async () => {
+      await fetch(`${API}/${currentSlug}/categories/supplies/items/${it.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qty: qtySelect.value }),
+      });
+      await refreshDetail();
+    });
+
+    const oxBtn = document.createElement("button");
+    oxBtn.type = "button";
+    oxBtn.className = "sup-ox-btn" + (it.done ? " done" : "");
+    oxBtn.textContent = it.done ? "O" : "X";
+    oxBtn.title = it.done ? "챙김 — 눌러서 취소" : "안 챙김 — 눌러서 챙김 표시";
+    oxBtn.addEventListener("click", () => toggleItem("supplies", it.id, !it.done));
+
+    // 수량+O/X는 한 묶음으로 같이 움직이게 해서, 좁은 화면에서 줄바꿈되더라도
+    // O/X만 따로 떨어져 나가지 않고 수량과 나란히 다음 줄로 내려가게 함.
+    const rightGroup = document.createElement("div");
+    rightGroup.className = "sup-right-group";
+    rightGroup.append(qtySelect, oxBtn);
+
+    row.append(delBtn, textEl, rightGroup);
     return row;
   }
 
