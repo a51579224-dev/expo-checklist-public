@@ -187,6 +187,7 @@
   .inv-title-block.has-option .inv-prod-name { font-size: 13px; font-weight: 700; color: var(--text); }
   .inv-opt-name { display: inline-block; margin-left: 4px; font-size: 18px; font-weight: 900; color: var(--accent-dark); cursor: text; word-break: break-word; }
   .inv-select-cb { flex-shrink: 0; margin: 2px 0 0; }
+  .inv-cat-select { flex-shrink: 0; max-width: 84px; padding: 3px 2px; border: 1px solid var(--border); border-radius: 7px; font-size: 11px; font-family: inherit; color: var(--text); background: #fff; }
   .inv-drag-handle {
     flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
     font-size: 16px; color: var(--muted); border: 1px solid var(--border); border-radius: 7px;
@@ -1214,6 +1215,20 @@
       titleBlock.appendChild(optEl);
     }
     head.appendChild(titleBlock);
+
+    // 카테고리 재지정 — 대시보드 분류가 틀렸거나 바꾸고 싶을 때 여기서 바로 옮길 수 있음.
+    const catSelect = document.createElement("select");
+    catSelect.className = "inv-cat-select";
+    catSelect.title = "카테고리 변경";
+    PRODUCT_CATEGORIES.concat(["기타"]).forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = `${PRODUCT_CATEGORY_ICONS[c] || ""} ${c}`;
+      catSelect.appendChild(opt);
+    });
+    catSelect.value = itemCategory(it);
+    catSelect.addEventListener("change", () => saveInventoryItem(it.id, { category: catSelect.value }));
+    head.appendChild(catSelect);
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
