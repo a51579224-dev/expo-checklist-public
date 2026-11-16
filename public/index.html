@@ -1098,7 +1098,8 @@
   let PRODUCT_CATEGORIES = [...BASE_PRODUCT_CATEGORIES];
   const PRODUCT_CATEGORY_ICONS = { "식기": "🍽️", "스크래쳐": "🪵", "쿠션": "🛋️", "장난감": "🧶", "기타": "📦" };
   function syncProductCategories(invCat) {
-    PRODUCT_CATEGORIES = [...BASE_PRODUCT_CATEGORIES, ...((invCat && invCat.customCategories) || [])];
+    const custom = (invCat && invCat.customCategories) || [];
+    PRODUCT_CATEGORIES = [...new Set([...BASE_PRODUCT_CATEGORIES, ...custom])];
   }
   function guessProductCategory(name) {
     const n = name || "";
@@ -1116,9 +1117,11 @@
     btn.addEventListener("click", async () => {
       const name = prompt("새 카테고리 이름을 입력하세요 (예: 미끄럼방지 매트)");
       if (!name || !name.trim()) return;
-      await fetch(`${API}/${currentSlug}/categories/inventory/custom-categories`, {
+      const res = await fetch(`${API}/${currentSlug}/categories/inventory/custom-categories`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }),
       });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "카테고리를 추가하지 못했어요."); return; }
       onAdded(name.trim());
     });
     return btn;
@@ -1144,10 +1147,9 @@
     });
     cats.forEach((cat) => {
       const list = groups.get(cat);
-      // 기본 4종류+기타는 비어있으면 복잡해지지 않게 숨기고, 수동으로 추가한 카테고리는
-      // 방금 만들었다는 걸 확인할 수 있게 품목이 0개여도 타일을 보여줌.
-      const isCustom = !BASE_PRODUCT_CATEGORIES.includes(cat) && cat !== "기타";
-      if (list.length === 0 && !isCustom) return;
+      // 기본 4종류 + 수동으로 추가한 카테고리는 품목이 0개여도 항상 타일을 보여줘서
+      // 바로 그 종류에 품목을 추가하러 들어갈 수 있게 함. "기타"만 비어있으면 숨김.
+      if (list.length === 0 && cat === "기타") return;
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "cat-dash-tile";

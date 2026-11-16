@@ -406,6 +406,8 @@ app.post("/api/events/:slug/duplicate", async (req, res) => {
 });
 
 // 상품 재고 카테고리(쿠션/스크래쳐/식기/장난감 외) 수동 추가 — 행사별로 따로 저장됨
+const BASE_PRODUCT_CATEGORIES = ["식기", "스크래쳐", "쿠션", "장난감"];
+
 app.post("/api/events/:slug/categories/inventory/custom-categories", async (req, res) => {
   const { name } = req.body ?? {};
   if (!name || !name.trim()) return res.status(400).json({ error: "카테고리 이름을 입력해주세요." });
@@ -415,6 +417,9 @@ app.post("/api/events/:slug/categories/inventory/custom-categories", async (req,
     const ev = rowToEvent(row);
     const cat = findCategory(ev, "inventory");
     const trimmed = name.trim();
+    if (BASE_PRODUCT_CATEGORIES.includes(trimmed)) {
+      return res.status(400).json({ error: `"${trimmed}"은(는) 이미 기본 카테고리예요.` });
+    }
     if (!Array.isArray(cat.customCategories)) cat.customCategories = [];
     if (!cat.customCategories.includes(trimmed)) cat.customCategories.push(trimmed);
     await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
