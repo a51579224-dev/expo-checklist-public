@@ -842,7 +842,7 @@
     // 고르면 그 종류 품목만 걸러서 보여줌(철수 정산 탭 "남은 재고"도 같은 방식).
     if (invStockCategoryView === null) {
       container.appendChild(buildCategoryDashboard(items, (c) => { invStockCategoryView = c; renderDetail(); }));
-      container.appendChild(buildAddCategoryButton(() => renderDetail()));
+      container.appendChild(buildAddCategoryButton(() => refreshDetail()));
       return;
     }
     container.appendChild(buildCategoryBackBtn(() => { invStockCategoryView = null; renderDetail(); }));
@@ -1904,7 +1904,7 @@
 
     if (remainingStockCategoryView === null) {
       sec.appendChild(buildCategoryDashboard(items, (c) => { remainingStockCategoryView = c; renderDetail(); }));
-      sec.appendChild(buildAddCategoryButton(() => renderDetail()));
+      sec.appendChild(buildAddCategoryButton(() => refreshDetail()));
       container.appendChild(sec);
       return;
     }
