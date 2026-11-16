@@ -430,6 +430,7 @@
   let lastAnimatedCatId = null;
   let invFilter = { onlyUnprepared: false, onlyUnloaded: false };
   let invStockCategoryView = null; // null이면 대시보드(4종류 타일), 아니면 그 종류만 보여줌
+  let invProductView = null; // 카테고리 안에서 null이면 품목 목록, 아니면 그 품목의 옵션들만 보여줌
   let remainingStockCategoryView = null; // 남은 재고 탭도 동일한 방식
   const cardOptionGroups = new Map(); // 품목 id -> 옵션 나누기용 그룹 배열(카드 다시 그려도 입력 중이던 내용 유지)
   const cardOptionOpen = new Set(); // "옵션 나누기" 패널을 펼쳐둔 품목 id들
@@ -841,15 +842,10 @@
     // 쿠션/스크래쳐/식기/장난감 4종류 대시보드 — 종류를 고르기 전엔 타일만 보여주고,
     // 고르면 그 종류 품목만 걸러서 보여줌(철수 정산 탭 "남은 재고"도 같은 방식).
     if (invStockCategoryView === null) {
-      container.appendChild(buildCategoryDashboard(items, (c) => { invStockCategoryView = c; renderDetail(); }));
+      container.appendChild(buildCategoryDashboard(items, (c) => { invStockCategoryView = c; invProductView = null; renderDetail(); }));
       container.appendChild(buildAddCategoryButton(() => refreshDetail()));
       return;
     }
-    container.appendChild(buildCategoryBackBtn(() => { invStockCategoryView = null; renderDetail(); }));
-    const titleEl = document.createElement("div");
-    titleEl.className = "cat-drilled-title";
-    titleEl.textContent = `${PRODUCT_CATEGORY_ICONS[invStockCategoryView] || "📦"} ${invStockCategoryView}`;
-    container.appendChild(titleEl);
 
     // 필터 적용(종류 + 미준비/미적재)
     const visibleItems = items.filter((it) => {
@@ -860,6 +856,61 @@
     });
 
     if (visibleItems.length === 0) {
+      container.appendChild(buildCategoryBackBtn(() => { invStockCategoryView = null; invProductView = null; renderDetail(); }));
+      const titleEl0 = document.createElement("div");
+      titleEl0.className = "cat-drilled-title";
+      titleEl0.textContent = `${PRODUCT_CATEGORY_ICONS[invStockCategoryView] || "📦"} ${invStockCategoryView}`;
+      container.appendChild(titleEl0);
+      const empty = document.createElement("div");
+      empty.className = "inv-empty";
+      empty.textContent = "필터 조건에 맞는 품목이 없어요.";
+      container.appendChild(empty);
+      return;
+    }
+
+    // 품목명(옵션 떼고 난 앞부분)별로 묶음 — 옵션이 여러 개인 품목은 "윗식기/밑식기"처럼
+    // 한 번 더 눌러서 들어가는 폴더로, 옵션이 하나뿐인 품목은 바로 카드로 보여줌.
+    const productGroups = new Map();
+    visibleItems.forEach((it) => {
+      const [namePart] = splitItemText(it.text);
+      if (!productGroups.has(namePart)) productGroups.set(namePart, []);
+      productGroups.get(namePart).push(it);
+    });
+
+    if (invProductView === null) {
+      container.appendChild(buildCategoryBackBtn(() => { invStockCategoryView = null; invProductView = null; renderDetail(); }));
+      const titleEl = document.createElement("div");
+      titleEl.className = "cat-drilled-title";
+      titleEl.textContent = `${PRODUCT_CATEGORY_ICONS[invStockCategoryView] || "📦"} ${invStockCategoryView}`;
+      container.appendChild(titleEl);
+
+      const folderNames = [];
+      const directItems = [];
+      productGroups.forEach((list, name) => {
+        if (list.length > 1) folderNames.push(name); else directItems.push(list[0]);
+      });
+
+      if (folderNames.length > 0) {
+        container.appendChild(buildProductDashboard(productGroups, folderNames, (name) => { invProductView = name; renderDetail(); }));
+      }
+      if (directItems.length > 0) {
+        const grid = document.createElement("div");
+        grid.className = "inv-cards-grid";
+        directItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable: false, onSelectChange: syncBulkBar })));
+        container.appendChild(grid);
+      }
+      return;
+    }
+
+    // 품목 폴더 안 — 그 품목의 옵션들만 카드로 보여줌
+    container.appendChild(buildProductBackBtn(() => { invProductView = null; renderDetail(); }));
+    const titleEl = document.createElement("div");
+    titleEl.className = "cat-drilled-title";
+    titleEl.textContent = `${PRODUCT_CATEGORY_ICONS[invStockCategoryView] || "📦"} ${invStockCategoryView} > ${invProductView}`;
+    container.appendChild(titleEl);
+
+    const optionItems = productGroups.get(invProductView) || [];
+    if (optionItems.length === 0) {
       const empty = document.createElement("div");
       empty.className = "inv-empty";
       empty.textContent = "필터 조건에 맞는 품목이 없어요.";
@@ -871,7 +922,7 @@
     // 서버 reorder API가 전체 품목 id 배열을 요구해서, 일부만으로는 순서가 꼬일 수 있음.
     const grid = document.createElement("div");
     grid.className = "inv-cards-grid";
-    visibleItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable: false, onSelectChange: syncBulkBar })));
+    optionItems.forEach((it) => grid.appendChild(buildInventoryCard(it, { draggable: false, onSelectChange: syncBulkBar })));
     container.appendChild(grid);
   }
 
@@ -1170,6 +1221,37 @@
     btn.type = "button";
     btn.className = "small secondary cat-back-btn";
     btn.textContent = "← 종류 다시 선택";
+    btn.addEventListener("click", onBack);
+    return btn;
+  }
+
+  // 카테고리 안에서 옵션이 여러 개인 품목들을 "윗식기/밑식기"처럼 폴더 타일로 보여줌 —
+  // 눌러서 들어가면 그 품목의 옵션 카드들만 걸러서 보여줌(buildProductBackBtn으로 돌아옴).
+  function buildProductDashboard(productGroups, folderNames, onSelect) {
+    const wrap = document.createElement("div");
+    wrap.className = "cat-dash-grid";
+    folderNames.forEach((name) => {
+      const list = productGroups.get(name) || [];
+      const doneCount = list.filter((it) => it.done).length;
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "cat-dash-tile prod-dash-tile";
+      tile.innerHTML = `
+        <span class="cat-dash-icon">📁</span>
+        <span class="cat-dash-name">${escapeHtml(name)}</span>
+        <span class="cat-dash-count">${list.length}개 옵션${doneCount ? ` · ${doneCount}개 준비됨` : ""}</span>
+      `;
+      tile.addEventListener("click", () => onSelect(name));
+      wrap.appendChild(tile);
+    });
+    return wrap;
+  }
+
+  function buildProductBackBtn(onBack) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "small secondary cat-back-btn";
+    btn.textContent = "← 품목 목록으로";
     btn.addEventListener("click", onBack);
     return btn;
   }
