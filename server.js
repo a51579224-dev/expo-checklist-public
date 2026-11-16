@@ -133,6 +133,7 @@ function cloneCategories(categories) {
   return categories.map((c) => ({
     id: c.id,
     name: c.name,
+    ...(c.customCategories !== undefined ? { customCategories: c.customCategories } : {}),
     // 품목(text)과 '준비 예정' 계획 수량·분류는 그대로 가져오되, 완료/적재 체크와 실제 확인 수량·메모는 초기화.
     items: c.items.map((it) => ({
       id: newId("item"),
@@ -401,6 +402,42 @@ app.post("/api/events/:slug/duplicate", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// 상품 재고 카테고리(쿠션/스크래쳐/식기/장난감 외) 수동 추가 — 행사별로 따로 저장됨
+app.post("/api/events/:slug/categories/inventory/custom-categories", async (req, res) => {
+  const { name } = req.body ?? {};
+  if (!name || !name.trim()) return res.status(400).json({ error: "카테고리 이름을 입력해주세요." });
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const ev = rowToEvent(row);
+    const cat = findCategory(ev, "inventory");
+    const trimmed = name.trim();
+    if (!Array.isArray(cat.customCategories)) cat.customCategories = [];
+    if (!cat.customCategories.includes(trimmed)) cat.customCategories.push(trimmed);
+    await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
+    res.json({ customCategories: cat.customCategories });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || err) });
+  }
+});
+
+// 수동 추가한 카테고리 삭제 — 그 카테고리를 쓰던 품목은 "기타"로 돌아감(품목 자체는 안 지워짐)
+app.delete("/api/events/:slug/categories/inventory/custom-categories/:name", async (req, res) => {
+  try {
+    const row = await getEventRow(req.params.slug);
+    if (!row) return res.status(404).json({ error: "존재하지 않는 체크리스트 링크예요." });
+    const ev = rowToEvent(row);
+    const cat = findCategory(ev, "inventory");
+    const name = decodeURIComponent(req.params.name);
+    cat.customCategories = (cat.customCategories || []).filter((c) => c !== name);
+    cat.items.forEach((it) => { if (it.category === name) delete it.category; });
+    await pool.query("update events set categories = $2, updated_at = now() where slug = $1", [req.params.slug, JSON.stringify(ev.categories)]);
+    res.json({ customCategories: cat.customCategories });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: String(err.message || err) });
   }
 });
 

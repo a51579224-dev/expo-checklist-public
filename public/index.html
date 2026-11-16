@@ -171,6 +171,7 @@
   .cat-dash-name { font-size: 16px; font-weight: 800; color: var(--text); }
   .cat-dash-count { font-size: 12px; color: var(--accent-dark); font-weight: 600; }
   .cat-back-btn { display: block; width: auto; margin: 0 0 12px; }
+  .cat-add-btn { display: block; width: 100%; margin: 0 0 12px; border-style: dashed; }
   .cat-drilled-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
 
   .inv-bulk-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--accent-light); border-radius: 10px; padding: 10px; margin-bottom: 14px; }
@@ -694,6 +695,7 @@
   // ===== 상품 재고 탭: 품목별 준비 수량(CTN/PC) + 준비완료/차량적재완료 더블체크 =====
   function renderInventoryPanel(container, cat) {
     const items = cat.items;
+    syncProductCategories(cat);
 
     // 요약 카드
     const total = items.length;
@@ -839,7 +841,8 @@
     // 쿠션/스크래쳐/식기/장난감 4종류 대시보드 — 종류를 고르기 전엔 타일만 보여주고,
     // 고르면 그 종류 품목만 걸러서 보여줌(철수 정산 탭 "남은 재고"도 같은 방식).
     if (invStockCategoryView === null) {
-      container.appendChild(buildCategoryDashboard(items, (cat) => { invStockCategoryView = cat; renderDetail(); }));
+      container.appendChild(buildCategoryDashboard(items, (c) => { invStockCategoryView = c; renderDetail(); }));
+      container.appendChild(buildAddCategoryButton(() => renderDetail()));
       return;
     }
     container.appendChild(buildCategoryBackBtn(() => { invStockCategoryView = null; renderDetail(); }));
@@ -1089,14 +1092,36 @@
 
   // 제품명 키워드로 4대 종류(식기/스크래쳐/쿠션/장난감)를 자동 분류. 겹치는 키워드가 있으면
   // 더 구체적인 쪽(식기/스크래쳐/쿠션)을 "장난감"보다 먼저 판단함.
-  const PRODUCT_CATEGORIES = ["식기", "스크래쳐", "쿠션", "장난감"];
+  // 여기에 행사별로 수동 추가한 카테고리(customCategories, 서버에 저장됨)가 더해짐 —
+  // syncProductCategories()가 상품 재고/남은 재고를 그릴 때마다 최신으로 맞춰줌.
+  const BASE_PRODUCT_CATEGORIES = ["식기", "스크래쳐", "쿠션", "장난감"];
+  let PRODUCT_CATEGORIES = [...BASE_PRODUCT_CATEGORIES];
   const PRODUCT_CATEGORY_ICONS = { "식기": "🍽️", "스크래쳐": "🪵", "쿠션": "🛋️", "장난감": "🧶", "기타": "📦" };
+  function syncProductCategories(invCat) {
+    PRODUCT_CATEGORIES = [...BASE_PRODUCT_CATEGORIES, ...((invCat && invCat.customCategories) || [])];
+  }
   function guessProductCategory(name) {
     const n = name || "";
     for (const cat of PRODUCT_CATEGORIES) {
       if (n.includes(cat)) return cat;
     }
     return "기타";
+  }
+
+  function buildAddCategoryButton(onAdded) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "small secondary cat-add-btn";
+    btn.textContent = "+ 카테고리 추가";
+    btn.addEventListener("click", async () => {
+      const name = prompt("새 카테고리 이름을 입력하세요 (예: 미끄럼방지 매트)");
+      if (!name || !name.trim()) return;
+      await fetch(`${API}/${currentSlug}/categories/inventory/custom-categories`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }),
+      });
+      onAdded(name.trim());
+    });
+    return btn;
   }
 
   // 품목 추가 시 카테고리를 직접 고른 경우(it.category) 그걸 우선 쓰고, 안 골랐으면
@@ -1119,7 +1144,10 @@
     });
     cats.forEach((cat) => {
       const list = groups.get(cat);
-      if (list.length === 0) return;
+      // 기본 4종류+기타는 비어있으면 복잡해지지 않게 숨기고, 수동으로 추가한 카테고리는
+      // 방금 만들었다는 걸 확인할 수 있게 품목이 0개여도 타일을 보여줌.
+      const isCustom = !BASE_PRODUCT_CATEGORIES.includes(cat) && cat !== "기타";
+      if (list.length === 0 && !isCustom) return;
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "cat-dash-tile";
@@ -1862,6 +1890,7 @@
     sec.innerHTML = `<div class="settle-section-title">① 남은 재고</div>`;
     const invCat = ev.categories.find((c) => c.id === "inventory");
     const items = invCat ? invCat.items : [];
+    syncProductCategories(invCat);
 
     if (items.length === 0) {
       const hint = document.createElement("div");
@@ -1874,7 +1903,8 @@
     }
 
     if (remainingStockCategoryView === null) {
-      sec.appendChild(buildCategoryDashboard(items, (cat) => { remainingStockCategoryView = cat; renderDetail(); }));
+      sec.appendChild(buildCategoryDashboard(items, (c) => { remainingStockCategoryView = c; renderDetail(); }));
+      sec.appendChild(buildAddCategoryButton(() => renderDetail()));
       container.appendChild(sec);
       return;
     }
